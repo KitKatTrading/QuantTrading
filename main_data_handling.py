@@ -11,7 +11,7 @@ intervals = ['1d', '1h', '10m']
 for symbol in symbols:
     print(f"Updating data for {symbol}...")
 
-    # Update and save data for different intervals.
+    # Update and save data_raw for different intervals.
     for interval in intervals:
         print(f"Updating data for {symbol} at interval {interval}...")
 

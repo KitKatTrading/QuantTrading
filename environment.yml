@@ -1,0 +1,14 @@
+name: quant_trading_crypto_binance_2023
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8  # Specify the Python version
+  - ta-lib
+  - numpy
+  - pandas
+  - matplotlib
+  - pip
+  - pip:
+      - python-binance
+      - pytz
