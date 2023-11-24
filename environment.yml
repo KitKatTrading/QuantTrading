@@ -11,4 +11,6 @@ dependencies:
   - pip
   - pip:
       - python-binance
-      - pytz
+      - plotly
+      - scipy
+      - scikit-learn
