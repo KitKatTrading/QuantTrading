@@ -4,8 +4,8 @@ import plotly.graph_objs as go
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
-DEBUG_PLOT = True
-DEBUG_PRINT = True
+DEBUG_PLOT = False
+DEBUG_PRINT = False
 
 def debug_logging(message, debug_print=DEBUG_PRINT):
     if debug_print:
@@ -100,7 +100,7 @@ def debug_plot_segments(df_PV, df_HL, df_segments):
     # Show the plot
     fig.show()
 
-def debug_plot_hubs(df_PV, df_HL, df_segments, df_hubs):
+def debug_plot_hubs_using_HL(df_PV, df_HL, df_hubs):
 
     # Create a new figure
     fig = go.Figure()
@@ -122,7 +122,6 @@ def debug_plot_hubs(df_PV, df_HL, df_segments, df_hubs):
         pre_hub_high = cur_hub_high
         pre_hub_low = cur_hub_low
 
-
     # Add bars for each direction in df_HL
     fig.add_trace(go.Bar(x=df_HL.index,
                          y=df_HL['High'] - df_HL['Low'],
@@ -132,18 +131,15 @@ def debug_plot_hubs(df_PV, df_HL, df_segments, df_hubs):
                          name='Directional Bars',
                          opacity=0.6))  # Adjusting opacity for better visualization
 
-    # Iterate over each segment
-    for _, row in df_segments.iterrows():
-        start_idx = row['idx_start']
-        end_idx = row['idx_end']
+    # Iterate over df_PV to draw consecutive lines
+    for i in range(len(df_PV) - 1):
+        # Current point
+        start_idx = df_PV.index[i]
+        start_value = df_PV.iloc[i]['factor_value']
 
-        if end_idx not in df_PV.index or start_idx not in df_PV.index:
-            continue
-        else:
-            start_row = df_PV.loc[start_idx]
-            end_row = df_PV.loc[end_idx]
-            start_value = start_row['High'] if start_row['pv_type'] == 'Peak' else start_row['Low']
-            end_value = end_row['High'] if end_row['pv_type'] == 'Peak' else end_row['Low']
+        # Next point
+        end_idx = df_PV.index[i + 1]
+        end_value = df_PV.iloc[i + 1]['factor_value']
 
         # Add a line trace for this segment
         fig.add_trace(go.Scatter(x=[start_idx, end_idx],
@@ -173,6 +169,151 @@ def debug_plot_hubs(df_PV, df_HL, df_segments, df_hubs):
     # Show the plot
     fig.show()
 
+def debug_plot_hubs_using_OHLC(df_PV, df_OHLC, df_hubs):
+    # Create a new figure
+    fig = go.Figure()
+
+    # Calculate the hub directions
+    pre_hub_high = -1.
+    pre_hub_low = -1.
+    df_hubs['color'] = 'green'
+    for idx_hub, hub in df_hubs.iterrows():
+        cur_hub_high = hub['high']
+        cur_hub_low = hub['low']
+        if cur_hub_low > pre_hub_high:
+            df_hubs.at[idx_hub, 'direction'] = 'up'
+            df_hubs.at[idx_hub, 'color'] = 'green'
+        elif cur_hub_high < pre_hub_low:
+            df_hubs.at[idx_hub, 'direction'] = 'down'
+            df_hubs.at[idx_hub, 'color'] = 'red'
+        pre_hub_high = cur_hub_high
+        pre_hub_low = cur_hub_low
+
+    # Add candlestick trace for OHLC data
+    fig.add_trace(go.Candlestick(x=df_OHLC.index,
+                                 open=df_OHLC['Open'],
+                                 high=df_OHLC['High'],
+                                 low=df_OHLC['Low'],
+                                 close=df_OHLC['Close'],
+                                 name='OHLC'))
+
+    # Iterate over df_PV to draw consecutive lines
+    for i in range(len(df_PV) - 1):
+        # Current point
+        start_idx = df_PV.index[i]
+        start_value = df_PV.iloc[i]['factor_value']
+
+        # Next point
+        end_idx = df_PV.index[i + 1]
+        end_value = df_PV.iloc[i + 1]['factor_value']
+
+        # Add a line trace for this segment
+        fig.add_trace(go.Scatter(x=[start_idx, end_idx],
+                                 y=[start_value, end_value],
+                                 mode='lines+markers',
+                                 line=dict(width=2, color='black')))
+
+    # Iterate over each hub to draw rectangles
+    for _, hub in df_hubs.iterrows():
+        hub_color = hub['color']
+
+        # Add a rectangle to represent the hub zone
+        fig.add_shape(type="rect",
+                      x0=hub['start_idx'], y0=hub['low'],
+                      x1=hub['end_idx'], y1=hub['high'],
+                      line=dict(color=hub_color),
+                      fillcolor=hub_color,
+                      opacity=0.2)
+
+    # Set layout options
+    fig.update_layout(title='OHLC with Line Segments and Hubs',
+                      xaxis_title='Date',
+                      yaxis_title='Price',
+                      showlegend=True,
+                      xaxis_rangeslider_visible=False)
+
+    # Show the plot
+    fig.show()
+
+def debug_plot_hubs(df_PV, df_HL, df_OHLC, df_hubs):
+    # Create a new figure
+    fig = go.Figure()
+
+    # Calculate the hub directions
+    pre_hub_high = -1.
+    pre_hub_low = -1.
+    df_hubs['color'] = 'green'
+    for idx_hub, hub in df_hubs.iterrows():
+        cur_hub_high = hub['high']
+        cur_hub_low = hub['low']
+        if cur_hub_low > pre_hub_high:
+            df_hubs.at[idx_hub, 'direction'] = 'up'
+            df_hubs.at[idx_hub, 'color'] = 'green'
+        elif cur_hub_high < pre_hub_low:
+            df_hubs.at[idx_hub, 'direction'] = 'down'
+            df_hubs.at[idx_hub, 'color'] = 'red'
+        pre_hub_high = cur_hub_high
+        pre_hub_low = cur_hub_low
+
+    # Add HL bars
+    fig.add_trace(go.Bar(x=df_HL.index,
+                         y=df_HL['High'] - df_HL['Low'],
+                         base=df_HL['Low'],
+                         marker_color=df_HL['direction'].apply(
+                             lambda x: 'green' if x == 'Bullish' else 'red'),
+                         name='HL Bars',
+                         opacity=0.6))
+
+    # Add OHLC candlestick trace
+    fig.add_trace(go.Candlestick(x=df_OHLC.index,
+                                 open=df_OHLC['Open'],
+                                 high=df_OHLC['High'],
+                                 low=df_OHLC['Low'],
+                                 close=df_OHLC['Close'],
+                                 name='OHLC',
+                                 increasing_line=dict(color='green'),
+                                 decreasing_line=dict(color='red')))
+
+    # Iterate over df_PV to draw consecutive lines
+    for i in range(len(df_PV) - 1):
+        # Current point
+        start_idx = df_PV.index[i]
+        start_value = df_PV.iloc[i]['factor_value']
+
+        # Next point
+        end_idx = df_PV.index[i + 1]
+        end_value = df_PV.iloc[i + 1]['factor_value']
+
+        # Add a line trace for this segment
+        fig.add_trace(go.Scatter(x=[start_idx, end_idx],
+                                 y=[start_value, end_value],
+                                 mode='lines+markers',
+                                 line=dict(width=2, color='black'),
+                                 name='PV Lines' if i == 0 else None,  # Only show legend for the first line
+                                 showlegend=(i == 0)))
+
+    # Iterate over each hub to draw rectangles
+    for _, hub in df_hubs.iterrows():
+        hub_color = hub['color']
+
+        # Add a rectangle to represent the hub zone
+        fig.add_shape(type="rect",
+                      x0=hub['start_idx'], y0=hub['low'],
+                      x1=hub['end_idx'], y1=hub['high'],
+                      line=dict(color=hub_color),
+                      fillcolor=hub_color,
+                      opacity=0.2)
+
+    # Set layout options
+    fig.update_layout(title='Chan Theory Central Zones (Hubs)',
+                      xaxis_title='Date',
+                      yaxis_title='Price',
+                      showlegend=True,
+                      legend=dict(orientation="h", y=1, yanchor="bottom", x=0.5, xanchor="center"),
+                      xaxis_rangeslider_visible=False)
+
+    # Show the plot
+    fig.show()
 
 def apply_containing_pattern(df_OHLC_mid,
                              use_high_low=False,
@@ -626,6 +767,11 @@ def find_segments(df_PV, df_HL, debug_plot=DEBUG_PLOT):
     index_to_keep = list(set(index_to_keep_start + index_to_keep_end))
     df_PV_segments = df_PV.loc[index_to_keep]
     df_PV_segments.sort_values(by=['Idx'], inplace=True)
+
+    if df_PV_segments['pv_type'].iloc[-1] == df_PV_segments['pv_type'].iloc[-2]:
+        # drop the last one - bandaid solution
+        df_PV_segments = df_PV_segments.iloc[:-1]
+
     assert (df_PV_segments['pv_type'] != df_PV_segments['pv_type'].shift(1)).all()
 
     # refine the PVs
@@ -639,7 +785,7 @@ def find_segments(df_PV, df_HL, debug_plot=DEBUG_PLOT):
     return df_segments, df_PV_segments
 
 
-def find_hubs(df_segments, df_PV_segments, df_HL, debug_plot=DEBUG_PLOT):
+def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
 
     # Simplify the df_PV_segments to only contain essential values
     df_PV_segments_orig = df_PV_segments.copy()
@@ -687,7 +833,7 @@ def find_hubs(df_segments, df_PV_segments, df_HL, debug_plot=DEBUG_PLOT):
     in_hub = False
     is_new_hub = False
 
-    for i in range(len(df_PV_segments) - 3):
+    for i in range(1, len(df_PV_segments) - 3):
 
         debug_logging('Processing factor: ' + str(i))
         if i < last_included_factor_idx:
@@ -741,7 +887,7 @@ def find_hubs(df_segments, df_PV_segments, df_HL, debug_plot=DEBUG_PLOT):
                         in_hub = False
                         debug_logging(f'Hub breaks at {factor_cur_idx}')
                         list_hubs.append(cur_hub)
-                        last_included_factor_idx = j
+                        last_included_factor_idx = j - 1
                         break
 
     print(list_hubs)
@@ -749,19 +895,21 @@ def find_hubs(df_segments, df_PV_segments, df_HL, debug_plot=DEBUG_PLOT):
 
     # --- Visualization
     if debug_plot:
-        debug_plot_hubs(df_PV_segments_orig, df_HL, df_segments, df_hubs)
+        # debug_plot_hubs_using_HL(df_PV_segments, df_HL, df_hubs)
+        # debug_plot_hubs_using_OHLC(df_PV_segments, df_OHLC, df_hubs)
+        debug_plot_hubs(df_PV_segments, df_HL, df_OHLC, df_hubs)
 
     return df_hubs
 
 
 
-def main(df_OHLC_mid, num_candles=500,
-         use_high_low=False):
+def main(df_OHLC_mid, num_candles=500, use_high_low=False):
 
     """ This mid-timeframe strategy is based on the Chan Theory and contains the following steps:
     Step 1. Process the OHLC data with containing patterns. (包含关系)
     Step 2. Find peaks and valleys (fractal tops and bottoms) (顶底分型以及线段)
-    Step 3.
+    Step 3. Find central zones (hubs) (寻找中枢）
+    Step 4. Identify the trading setup (根据中枢分布决定交易形态）
 
     """
 
@@ -769,14 +917,14 @@ def main(df_OHLC_mid, num_candles=500,
     df_OHLC_mid = df_OHLC_mid.iloc[-num_candles:]
 
     # Step 1 - Apply containing patterns
-    df_HL = apply_containing_pattern(df_OHLC_mid, use_high_low=use_high_low, debug_plot=False)
+    df_HL = apply_containing_pattern(df_OHLC_mid, use_high_low=use_high_low, debug_plot=DEBUG_PLOT)
 
     # Step 2 - Extract line/segment peak/valleys
-    df_PV_raw = find_raw_peaks_valleys(df_HL, debug_plot=False)
-    df_segments, df_PV_segments = find_segments(df_PV_raw, df_HL, debug_plot=True)
+    df_PV_raw = find_raw_peaks_valleys(df_HL, debug_plot=DEBUG_PLOT)
+    _, df_PV_segments = find_segments(df_PV_raw, df_HL, debug_plot=DEBUG_PLOT)
 
     # Step 3 - Identify hubs
-    list_hubs = find_hubs(df_segments, df_PV_segments, df_HL, debug_plot=True)
+    df_hubs = find_hubs(df_PV_segments, df_HL, df_OHLC_mid, debug_plot=True)
 
 
 
