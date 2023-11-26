@@ -1,12 +1,15 @@
 import numpy as np
-import plotly.graph_objs as go
-from scipy.signal import find_peaks
 import pandas as pd
+import plotly.graph_objs as go
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
 DEBUG_PLOT = True
-DEBUG_PRINT = True
+DEBUG_PRINT = False
+
+def debug_logging(message, debug_print=DEBUG_PRINT):
+    if debug_print:
+        print(message)
 
 def debug_plot_peak_valley_factors(df_PV, df_HL):
     fig = go.Figure()
@@ -33,15 +36,74 @@ def debug_plot_peak_valley_factors(df_PV, df_HL):
                              marker=dict(color='red', size=10),
                              name='Valley'))
 
+    # Add lines connecting peaks and valleys
+    for i in range(len(df_PV) - 1):
+        current_row = df_PV.iloc[i]
+        next_row = df_PV.iloc[i + 1]
+
+        current_value = current_row['High'] if current_row['pv_type'] == 'Peak' else current_row['Low']
+        next_value = next_row['High'] if next_row['pv_type'] == 'Peak' else next_row['Low']
+
+        fig.add_trace(go.Scatter(x=[current_row.name, next_row.name],
+                                 y=[current_value, next_value],
+                                 mode='lines',
+                                 line=dict(color='black', width=1),
+                                 showlegend=False))  # Don't show these lines in the legend
+
     # Adjust layout to remove slide bar and add legend
     fig.update_layout(xaxis_rangeslider_visible=False, showlegend=True)
     fig.show()
 
+def debug_plot_segments(df_PV, df_HL, df_segments):
+    # Create a new figure
+    fig = go.Figure()
+
+    # Add bars for each direction in df_HL
+    fig.add_trace(go.Bar(x=df_HL.index,
+                         y=df_HL['High'] - df_HL['Low'],
+                         base=df_HL['Low'],
+                         marker_color=df_HL['direction'].apply(
+                             lambda x: 'green' if x == 'Bullish' else 'red'),
+                         name='Directional Bars',
+                         opacity=0.6))  # Adjusting opacity for better visualization
+
+    # Iterate over each segment
+    for i, row in enumerate(df_segments.iterrows()):
+        # Get start and end indexes
+        _, row = row  # row is a tuple of (index, row_data)
+        start_idx = row['idx_start']
+        end_idx = row['idx_end']
+
+        # Find the corresponding rows in df_PV
+        start_row = df_PV.loc[start_idx]
+        end_row = df_PV.loc[end_idx]
+
+        # Determine which value to use (High for Peak and Low for Valley)
+        start_value = start_row['High'] if start_row['pv_type'] == 'Peak' else start_row['Low']
+        end_value = end_row['High'] if end_row['pv_type'] == 'Peak' else end_row['Low']
+
+        # Add a line trace for this segment
+        fig.add_trace(go.Scatter(x=[start_idx, end_idx],
+                                 y=[start_value, end_value],
+                                 mode='lines+markers',
+                                 line=dict(width=2, color='black'),
+                                 name='Segment' if i == 0 else None,  # Only show legend for the first segment
+                                 showlegend=i == 0))
+
+    # Set layout options
+    fig.update_layout(title='Line Segments',
+                      xaxis_title='Date',
+                      yaxis_title='Price',
+                      showlegend=True,
+                      xaxis_rangeslider_visible=False)
+
+    # Show the plot
+    fig.show()
 
 def apply_containing_pattern(df_OHLC_mid,
                              use_high_low=False,
-                             debug_plot=False,
-                             debug_print=False,
+                             debug_plot=DEBUG_PLOT,
+                             debug_print=DEBUG_PRINT,
                              ):
 
     ### --- Re-arrange the highs and lows
@@ -96,7 +158,7 @@ def apply_containing_pattern(df_OHLC_mid,
 
         # Print counter
         counter_processing += 1
-        print(f'Processing containing patterns, round {counter_processing}')
+        debug_logging(f'Processing containing patterns, round {counter_processing}')
 
         # Further processing starts here. First identify the first containing candle.
         df_HL['is_contained_to_process'] = False
@@ -190,6 +252,7 @@ def find_raw_peaks_valleys(df_HL, debug_plot=DEBUG_PLOT):
 
     # save the peaks and valleys to a new DataFrame
     df_PV = df_HL[(df_HL['is_peak'] | df_HL['is_valley'])].copy()
+    df_PV['pv_type'] = ''
     df_PV.loc[df_PV['is_peak']==True, 'pv_type'] = 'Peak'
     df_PV.loc[df_PV['is_valley']==True, 'pv_type'] = 'Valley'
 
@@ -221,8 +284,10 @@ def find_raw_peaks_valleys(df_HL, debug_plot=DEBUG_PLOT):
 
     return df_PV
 
-
 def refine_peaks_valleys(df_PV, df_HL, debug_plot=DEBUG_PLOT):
+
+    if debug_plot:
+        debug_plot_peak_valley_factors(df_PV, df_HL)
 
     while True:
 
@@ -230,7 +295,7 @@ def refine_peaks_valleys(df_PV, df_HL, debug_plot=DEBUG_PLOT):
         clusters = []
         cluster_start = None
         for i in range(0, len(df_PV)):
-            print(f'Processing {i}th factor')
+            debug_logging(f'Processing {i}th factor')
 
             # if the current factor is the first factor
             if i == 0:
@@ -268,235 +333,326 @@ def refine_peaks_valleys(df_PV, df_HL, debug_plot=DEBUG_PLOT):
             break
 
         # --- Process one by one factor in each cluster
-        for cluster in clusters:
-            
+        index_to_remove = []
+        cluster = clusters[0]
+        debug_logging(f'Processing cluster: {cluster}')
+        debug_logging(f'Index cluster: {df_PV.iloc[cluster[0]:cluster[1]+1].index.tolist()}')
 
+        # if the first factor is a peak
+        if df_PV.iloc[cluster[0]]['pv_type'] == 'Peak':
+
+            # -- extract neighboring factors
+            # current peak
+            cur_peak = df_PV.iloc[cluster[0]]['High']
+            cur_peak_idx = df_PV.index[cluster[0]]
+
+            # current valley (the one before)
+            if cluster[0] == 0:
+                cur_valley = -1.0
+            else:
+                cur_valley = df_PV.iloc[cluster[0]-1]['Low']
+                cur_valley_idx = df_PV.index[cluster[0]-1]
+
+            # next valley
+            next_valley = df_PV.iloc[cluster[0]+1]['Low']
+            next_valley_idx = df_PV.index[cluster[0]+1]
+
+            # next peak
+            if cluster[0] == len(df_PV)-2:
+                next_peak = 9e9
+            else:
+                next_peak = df_PV.iloc[cluster[0]+2]['High']
+                next_peak_idx = df_PV.index[cluster[0]+2]
+
+            # --- process the cluster
+            if next_valley < cur_valley:
+                # if the next valley is lower than the current valley, then the next valley is the new valley
+                index_to_remove += [cur_peak_idx, cur_valley_idx]
+            elif next_peak > cur_peak:
+                # if the next peak is higher than the current peak, then the next peak is the new peak
+                index_to_remove += [cur_peak_idx, next_valley_idx]
+            else:
+                # if the next peak is lower than the current peak, then the current peak is the new peak
+                index_to_remove += [next_peak_idx, next_valley_idx]
+
+        # if the first factor is a valley
+        else:
+
+            # -- extract neighboring factors
+            # current valley
+            cur_valley = df_PV.iloc[cluster[0]]['Low']
+            cur_valley_idx = df_PV.index[cluster[0]]
+
+            # current peak (the one before)
+            if cluster[0] == 0:
+                cur_peak = 9e9
+            else:
+                cur_peak = df_PV.iloc[cluster[0]-1]['High']
+                cur_peak_idx = df_PV.index[cluster[0]-1]
+
+            # next peak
+            next_peak = df_PV.iloc[cluster[0]+1]['High']
+            next_peak_idx = df_PV.index[cluster[0]+1]
+
+            # next valley
+            if cluster[0] == len(df_PV)-2:
+                next_valley = -1.0
+            else:
+                next_valley = df_PV.iloc[cluster[0]+2]['Low']
+                next_valley_idx = df_PV.index[cluster[0]+2]
+
+            # --- process the cluster
+            if next_peak > cur_peak:
+                # if the next peak is higher than the current peak, then the next peak is the new peak
+                index_to_remove += [cur_valley_idx, cur_peak_idx]
+            elif next_valley < cur_valley:
+                # if the next valley is lower than the current valley, then the next valley is the new valley
+                index_to_remove += [cur_valley_idx, next_peak_idx]
+            else:
+                # if the next valley is higher than the current valley, then the current valley is the new valley
+                index_to_remove += [next_valley_idx, next_peak_idx]
+
+        # remove all identified factors
+        df_PV.drop(index_to_remove, inplace=True)
 
         # --- Visualization
         if debug_plot:
             debug_plot_peak_valley_factors(df_PV, df_HL)
 
+    # assert the factors are in alternating order
+    assert (df_PV['pv_type'] != df_PV['pv_type'].shift(1)).all()
+
+    return df_PV
+
+def find_segments(df_PV, df_HL, debug_plot=DEBUG_PLOT):
+
+    # assert the alternating pattern
+    assert (df_PV['pv_type'] != df_PV['pv_type'].shift(1)).all()
+
+    if debug_plot:
+        debug_plot_peak_valley_factors(df_PV, df_HL)
+
+    # Define an empty list to store segment data
+    segments = []
+
+    # extract segments using a loop
+    df_PV_copy = df_PV.copy()
+    while True:
+        seg_start = df_PV_copy.index[0]
+
+        if seg_start == df_PV.index[-1]:
+            break
+
+        # if the starting factor is a valley
+        if df_PV_copy.iloc[0]['pv_type'] == 'Valley':
+            seg_direction = 'up'
+
+            # check if a line just becomes a segment
+            segment_failed = False
+
+            # case when there are only two factors left, then it is the last "segment"
+            if len(df_PV_copy) == 2:
+                segment_failed = True
+                seg_end = df_PV_copy.index[1]
+            elif len(df_PV_copy) == 3:
+                segment_failed = True
+                if df_PV_copy.iloc[2]['Low'] < df_PV_copy.iloc[0]['Low']:
+                    seg_end = df_PV_copy.index[2]
+                else:
+                    seg_end = df_PV_copy.index[1]
+
+            if segment_failed:
+                segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                segments.append(segment_data)
+            # otherwise, a minimum segment can be found for at least two consecutive valleys
+            else:
+                # increasing trend
+                for i in range(3, len(df_PV_copy)):
+
+                    # case when the segment hits a first valley that breaks the monotonous increasing trend
+                    if df_PV_copy.iloc[i]['pv_type'] == 'Valley':
+                        if df_PV_copy.iloc[i]['Low'] < df_PV_copy.iloc[i-2]['Low']:
+                            seg_end = df_PV_copy.index[i-1]
+                            segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                            segments.append(segment_data)
+                            break
+                    # case when the segment hits a first peak that breaks the monotonous increasing trend
+                    else:
+                        if df_PV_copy.iloc[i]['High'] < df_PV_copy.iloc[i-2]['High']:
+                            seg_end = df_PV_copy.index[i-2]
+                            segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                            segments.append(segment_data)
+                            break
+
+                    # case when it is the end of the df_PV_copy
+                    if df_PV_copy.index[i] == df_PV.index[-1]:
+                        seg_end = df_PV_copy.index[-1]
+                        segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                        segments.append(segment_data)
+                        break
+
+        # if the starting factor is a peak
+        else:
+            seg_direction = 'down'
+
+            # check if a line just becomes a segment
+            segment_failed = False
+
+            # case when there are only two factors left, then it is the last "segment"
+            if len(df_PV_copy) == 2:
+                segment_failed = True
+                seg_end = df_PV_copy.index[1]
+            elif len(df_PV_copy) == 3:
+                segment_failed = True
+                if df_PV_copy.iloc[2]['High'] > df_PV_copy.iloc[0]['High']:
+                    seg_end = df_PV_copy.index[2]
+                else:
+                    seg_end = df_PV_copy.index[1]
+
+            if segment_failed:
+                segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                segments.append(segment_data)
+            # otherwise, a minimum segment can be found for at least two consecutive valleys
+            else:
+                # decreasing trend
+                for i in range(3, len(df_PV_copy)):
+
+                    # case when the segment hits a first peak that breaks the monotonous decreasing trend
+                    if df_PV_copy.iloc[i]['pv_type'] == 'Peak':
+                        if df_PV_copy.iloc[i]['High'] > df_PV_copy.iloc[i-2]['High']:
+                            seg_end = df_PV_copy.index[i-1]
+                            segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                            segments.append(segment_data)
+                            break
+                    # case when the segment hits a first valley that breaks the monotonous decreasing trend
+                    else:
+                        if df_PV_copy.iloc[i]['Low'] > df_PV_copy.iloc[i-2]['Low']:
+                            seg_end = df_PV_copy.index[i-2]
+                            segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                            segments.append(segment_data)
+                            break
+
+                    # case when it is the end of the df_PV_copy
+                    if df_PV_copy.index[i] == df_PV.index[-1]:
+                        seg_end = df_PV_copy.index[-1]
+                        segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                        segments.append(segment_data)
+                        break
+
+
+        # update the df_PV_copy
+        debug_logging(f'Processed segment: {seg_start} to {seg_end}')
+        df_PV_copy = df_PV_copy.loc[seg_end:]
+
+    # Create df_segments from the segments list
+    df_segments = pd.DataFrame(segments)
+
+    # Create a subset of df_PV that only contains the segment indexes
+    index_to_keep_start = df_segments['idx_start'].tolist()
+    index_to_keep_end = df_segments['idx_end'].tolist()
+    index_to_keep = list(set(index_to_keep_start + index_to_keep_end))
+    df_PV_segments = df_PV.loc[index_to_keep]
+    df_PV_segments.sort_values(by=['Idx'], inplace=True)
+    assert (df_PV_segments['pv_type'] != df_PV_segments['pv_type'].shift(1)).all()
+
+    # refine the PVs
+    df_PV_segments = refine_peaks_valleys(df_PV_segments, df_HL, debug_plot=False)
+
+    # --- Visualization
+    if debug_plot:
+        debug_plot_segments(df_PV, df_HL, df_segments)
+        debug_plot_peak_valley_factors(df_PV_segments, df_HL)
+
+    return df_segments, df_PV_segments
+
+
+def find_hubs(df_PV_segments, df_HL, debug_plot=DEBUG_PLOT):
+
+    # Simplify the df_PV_segments to only contain essential values
+    df_PV_segments['factor_value'] = np.where(df_PV_segments['pv_type'] == 'Peak',
+                                              df_PV_segments['High'],
+                                              df_PV_segments['Low'])
+    df_PV_segments['factor_value'] = df_PV_segments['factor_value'].astype(float)
+    df_PV_segments.drop(['High', 'Low', 'is_peak', 'is_valley', 'pv_high', 'pv_low', 'direction'], axis=1, inplace=True)
+
+    # Create a list to store the hubs
+    list_hubs = []
+
+    # Define a function to check if two line segments overlap
+    def check_overlap(segment1, segment2):
+        return max(segment1[0], segment2[0]) <= min(segment1[1], segment2[1])
+
+    # Loop through the segments to find the hubs
+    last_included_factor_idx = -1
+    for i in range(len(df_PV_segments) - 3):
+        if i <= last_included_factor_idx:
+            # Skip this iteration if it's part of an already processed hub
+            continue
+
+        # Get the current factor and the next three factors
+        current_factor = df_PV_segments.iloc[i]
+        next_factors = df_PV_segments.iloc[i + 1:i + 4]
+
+        # Determine if the next three lines overlap to form a hub
+        hub_start_idx = current_factor['Idx']
+        hub_high = None
+        hub_low = None
+        hub_direction = 'up' if current_factor['pv_type'] == 'Valley' else 'down'
+
+        # Determine if the first three lines (current and next two factors) form a hub
+        if current_factor['pv_type'] == 'Valley':
+            # For a down hub, check if the high of the valley is overlapping with the low of the next peak
+            is_hub = check_overlap((current_factor['factor_value'], next_factors.iloc[0]['factor_value']),
+                                   (next_factors.iloc[1]['factor_value'], next_factors.iloc[2]['factor_value']))
+        else:
+            # For an up hub, check if the low of the peak is overlapping with the high of the next valley
+            is_hub = check_overlap((current_factor['factor_value'], next_factors.iloc[0]['factor_value']),
+                                   (next_factors.iloc[1]['factor_value'], next_factors.iloc[2]['factor_value']))
+
+        if not is_hub:
+            continue  # Skip to next iteration if not a hub
+
+
+        # Check for overlap and define the hub's high and low
+        if hub_direction == 'down':
+            hub_high = min(current_factor['factor_value'], next_factors.iloc[0]['factor_value'])
+            hub_low = max(current_factor['factor_value'], next_factors.iloc[1]['factor_value'])
+        else:
+            hub_low = max(current_factor['factor_value'], next_factors.iloc[0]['factor_value'])
+            hub_high = min(current_factor['factor_value'], next_factors.iloc[1]['factor_value'])
+
+        # Check if the hub's high and low overlap with the next line
+        if check_overlap((hub_low, hub_high), (next_factors.iloc[2]['factor_value'], next_factors.iloc[2]['factor_value'])):
+            # Expand the hub until a non-overlapping factor is found
+            for j in range(i + 4, len(df_PV_segments)):
+                next_factor = df_PV_segments.iloc[j]
+                if hub_direction == 'down':
+                    new_hub_high = min(hub_high, next_factor['factor_value'])
+                    new_hub_low = max(hub_low, next_factor['factor_value'])
+                else:
+                    new_hub_low = max(hub_low, next_factor['factor_value'])
+                    new_hub_high = min(hub_high, next_factor['factor_value'])
+
+                # Check if the new hub high and low still overlap
+                if not check_overlap((new_hub_low, new_hub_high), (hub_low, hub_high)):
+                    break
+                hub_high = new_hub_high
+                hub_low = new_hub_low
+                hub_end_idx = next_factor['Idx']
+
+            # Add the hub to the list
+            list_hubs.append({'start_idx': hub_start_idx, 'end_idx': hub_end_idx, 'high': hub_high, 'low': hub_low,
+                              'direction': hub_direction})
+
+            last_included_factor_idx = df_PV_segments.index.get_loc(hub_end_idx)
+
+            print(f'Found hub from {hub_start_idx} to {hub_end_idx} with high {hub_high} and low {hub_low}')
+
+    return list_hubs
 
 
 
-    # # # print the clusters and their indices
-    # # print(f'Clusters: {clusters}')
-    # # for cluster in clusters:
-    # #     print(f'Processing cluster: {cluster}')
-    # #     print(f'Index cluster: {df_PV.iloc[cluster[0]:cluster[1]+1].index.tolist()}')
-    #
-    # # separate the clusters into even and odd clusters
-    # clusters_even = [cluster for cluster in clusters if (cluster[1] - cluster[0] + 1) % 2 == 0]
-    # clusters_odd = [cluster for cluster in clusters if (cluster[1] - cluster[0] + 1) % 2 == 1]
-    #
-    # ### Process the all clusters
-    # index_to_remove = []
-    #
-    # ### process the even clusters first
-    # for cluster in clusters_even:
-    #
-    #     # print the cluster
-    #     print(f'Processing cluster: {cluster}')
-    #     print(f'Index cluster: {df_PV.iloc[cluster[0]:cluster[1]+1].index.tolist()}')
-    #
-    #     # find the cluster high and lows
-    #     cluster_df = df_PV.iloc[cluster[0]:cluster[1] + 1]
-    #     cluster_high = cluster_df['High'].max()
-    #     cluster_high_idx = cluster_df['High'].idxmax()
-    #     cluster_low = cluster_df['Low'].min()
-    #     cluster_low_idx = cluster_df['Low'].idxmin()
-    #
-    #     # if the first factor is a peak, then check if the cluster low is lower than the prior factor's low
-    #     if cluster_df.iloc[0]['pv_type'] == 'Peak':
-    #         # if the cluster low is lower than the prior factor's low, then only keep cluster_low_idx
-    #         if cluster_low < df_PV.iloc[cluster[0]-1]['Low']:
-    #             index_to_remove += cluster_df.index.tolist()
-    #             index_to_remove.append(df_PV.index[cluster[0]-1])
-    #             index_to_remove.remove(cluster_low_idx)
-    #         # otherwise, remove all factors in the cluster
-    #         else:
-    #             index_to_remove += cluster_df.index.tolist()
-    #     # if the first factor is a valley, then check if the cluster high is higher than the prior factor's high
-    #     else:
-    #         # if the cluster high is higher than the prior factor's high, then only keep cluster_high_idx
-    #         if cluster_high > df_PV.iloc[cluster[0]-1]['High']:
-    #             index_to_remove += cluster_df.index.tolist()
-    #             index_to_remove.append(df_PV.index[cluster[0]-1])
-    #             index_to_remove.remove(cluster_high_idx)
-    #         # otherwise, remove all factors in the cluster
-    #         else:
-    #             index_to_remove += cluster_df.index.tolist()
-    #
-    #
-    #
-    # ### now process the odd clusters
-    # for cluster in clusters_odd:
-    #
-    #     # print the cluster
-    #     print(f'Processing cluster: {cluster}')
-    #     print(f'Index cluster: {df_PV.iloc[cluster[0]:cluster[1]+1].index.tolist()}')
-    #
-    #     # find the cluster high and lows
-    #     cluster_df = df_PV.iloc[cluster[0]:cluster[1] + 1]
-    #     cluster_high = cluster_df['High'].max()
-    #     cluster_high_idx = cluster_df['High'].idxmax()
-    #     cluster_low = cluster_df['Low'].min()
-    #     cluster_low_idx = cluster_df['Low'].idxmin()
-    #
-    #     # if the first factor is a peak, then all we need is just one representative peak
-    #     if cluster_df.iloc[0]['pv_type'] == 'Peak':
-    #         index_to_remove += cluster_df.index.tolist()
-    #         index_to_remove.remove(cluster_high_idx)
-    #     # if the first factor is a valley, then all we need is just one representative valley
-    #     else:
-    #         index_to_remove += cluster_df.index.tolist()
-    #         index_to_remove.remove(cluster_low_idx)
-    #
-    # # remove all identified factors
-    # df_PV.drop(index_to_remove, inplace=True)
-    #
-    # # assert the factors are in alternating order
-    # assert (df_PV['pv_type'] != df_PV['pv_type'].shift(1)).all()
-    #
-    # # visualization
-    # if debug_plot:
-    #     # Create a new bar plot from 'Low' to 'High' for each bar
-    #     fig = go.Figure()
-    #
-    #     # Add bars for each direction
-    #     fig.add_trace(go.Bar(x=df_HL.index,
-    #                          y=df_HL['High'] - df_HL['Low'],
-    #                          base=df_HL['Low'],
-    #                          marker_color=df_HL['direction'].apply(
-    #                              lambda x: 'green' if x == 'Bullish' else 'red'),
-    #                          name='Directional Bars'))
-    #
-    #     # Add markers for 'is_contained'
-    #     fig.add_trace(go.Scatter(x=df_PV[df_PV['pv_type'] == 'Peak'].index,
-    #                              y=df_PV[df_PV['pv_type'] == 'Peak']['High'] * 1.01,
-    #                              mode='markers',
-    #                              marker=dict(color='blue', size=10),
-    #                              name='Peak'))
-    #
-    #     # Add markers for 'is_contained_to_process'
-    #     fig.add_trace(go.Scatter(x=df_PV[df_PV['pv_type'] == 'Valley'].index,
-    #                              y=df_PV[df_PV['pv_type'] == 'Valley']['Low'] * 0.99,
-    #                              mode='markers',
-    #                              marker=dict(color='red', size=10),
-    #                              name='Valley'))
-    #
-    #     # Adjust layout to remove slide bar and add legend
-    #     fig.update_layout(xaxis_rangeslider_visible=False, showlegend=True)
-    #     fig.show()
-
-    return 0
-
-
-    # # --- pre-processing special case where there are too close pv factors
-    # counter_processing_single = 0
-    # while True:
-    #     counter_processing_single += 1
-    #     print(f'Processing too-close pv factors, round {counter_processing_single}')
-    #
-    #     # Find pv factors that are too close to the previous one but distant enough from the next one
-    #     df_PV['is_too_close'] = (((df_PV['Idx'] - df_PV['Idx'].shift(1)) >= 4) &      ### current - previous
-    #                              ((df_PV['Idx'].shift(-1) - df_PV['Idx']) < 4))     ### next - current
-    #     if len(df_PV) > 0:
-    #         df_PV.at[df_PV.index[0], 'is_too_close'] = (df_PV['Idx'].iloc[1] - df_PV['Idx'].iloc[0]) < 4
-    #
-    #     # if there is no too-close pv factors, drop temprarily columns and break the loop
-    #     if not df_PV['is_too_close'].any():
-    #         df_PV.drop(['is_too_close'], axis=1, inplace=True)
-    #         break
-    #
-    #     # process the leading round of ending too-close pv factors
-    #     idx_to_remove = []
-    #     for i in range(1, len(df_PV)):
-    #         if df_PV.iloc[i]['is_too_close']:
-    #             # if the too-close factor is a peak
-    #             if df_PV.iloc[i]['pv_type'] == 'Peak':
-    #                 # if the ending is a peak, then the next valley is the new valley
-    #                 next_valley = df_PV.at[df_PV.index[i + 1], 'pv_low']
-    #                 pre_valley = df_PV.at[df_PV.index[i - 1], 'pv_low']
-    #                 if next_valley < pre_valley:
-    #                     idx_to_remove.append([df_PV.index[i-1], df_PV.index[i]])
-    #                 else:
-    #                     idx_to_remove.append([df_PV.index[i], df_PV.index[i+1]])
-    #             # if the too-close factor is a valley
-    #             else:
-    #                 # if the ending is a valley, then the next peak is the new peak
-    #                 next_peak = df_PV.at[df_PV.index[i + 1], 'pv_high']
-    #                 pre_peak = df_PV.at[df_PV.index[i - 1], 'pv_high']
-    #                 if next_peak > pre_peak:
-    #                     idx_to_remove.append([df_PV.index[i-1], df_PV.index[i]])
-    #                 else:
-    #                     idx_to_remove.append([df_PV.index[i], df_PV.index[i+1]])
-    #
-    #     # remove the too-close pv factors
-    #     for idx in idx_to_remove:
-    #         df_PV.drop(idx, inplace=True)
-    #
-
-
-    # # define state variable templates
-    # pv_template = {
-    #     'idx': -1,  # value1 can be of any data type, e.g., int, float, string, etc.
-    #     'high': -1.0,  # value2 can be different from value1's type
-    #     'low': -1.0,  # and so on...
-    # }
-    #
-    # line_template = {
-    #     'idx_start': -1,
-    #     'idx_end': -1,
-    #     'direction': None,
-    # }
-    #
-    # # initialize the state variables
-    # cur_peak = pv_template.copy()
-    # cur_valley = pv_template.copy()
-    # pre_peak = pv_template.copy()
-    # pre_valley = pv_template.copy()
-    # cur_line = line_template.copy()
-    #
-    # pre_peak['idx'] = 0
-    # pre_valley['idx'] = 0
-    # cur_line['idx_start'] = 0
-    # cur_line['idx_end'] = df_PV.iloc[0]['Idx']
-    #
-    # # if the first factor is a peak, then the first line is going up
-    # if df_PV.iloc[0]['pv_type'] == 'Peak':
-    #     cur_valley['idx'] = 0
-    #     cur_valley['high'] = 1e-10
-    #     cur_valley['low'] = 1e-10
-    #     cur_peak['idx'] = df_PV.iloc[0]['Idx']
-    #     cur_peak['high'] = df_PV.iloc[0]['pv_high']
-    #     cur_peak['low'] = df_PV.iloc[0]['pv_low']
-    #     cur_line['direction'] = 'up'
-    # # if the first factor is a valley, then the first line is going down
-    # else:
-    #     cur_peak['idx'] = 0
-    #     cur_peak['high'] = 9e9
-    #     cur_peak['low'] = 9e9
-    #     cur_valley['idx'] = df_PV.iloc[0]['Idx']
-    #     cur_valley['high'] = df_PV.iloc[0]['pv_high']
-    #     cur_valley['low'] = df_PV.iloc[0]['pv_low']
-    #     cur_line['direction'] = 'down'
-    #
-    # # loop through all factors to validate lines and pvs
-    # num_changes = 1
-    # while num_changes > 0:
-    #     num_changes = 0
-    #     if cur_line['direction'] == 'down':
-    #         next_first = 'peak'
-    #         next_second = 'valley'
-    #     else:
-    #         next_first = 'valley'
-    #         next_second = 'peak'
-    #
-    #
-
-
-def main(df_OHLC_mid, num_candles=200,
+def main(df_OHLC_mid, num_candles=300,
          use_high_low=False):
 
     """ This mid-timeframe strategy is based on the Chan Theory and contains the following steps:
@@ -510,12 +666,14 @@ def main(df_OHLC_mid, num_candles=200,
     df_OHLC_mid = df_OHLC_mid.iloc[-num_candles:]
 
     # Step 1 - Apply containing patterns
-    df_HL = apply_containing_pattern(df_OHLC_mid, use_high_low=use_high_low)
+    df_HL = apply_containing_pattern(df_OHLC_mid, use_high_low=use_high_low, debug_plot=False)
 
+    # Step 2 - Extract line/segment peak/valleys
+    df_PV_raw = find_raw_peaks_valleys(df_HL, debug_plot=False)
+    df_segments, df_PV_segments = find_segments(df_PV_raw, df_HL, debug_plot=True)
 
-    # Step 2 - Find peaks and valleys (fractal tops and bottoms)
-    df_PV_raw = find_raw_peaks_valleys(df_HL)
-    df_PV = refine_peaks_valleys(df_PV_raw, df_HL)
+    # Step 3 - Identify hubs
+    list_hubs = find_hubs(df_PV_segments, df_HL, debug_plot=True)
 
 
 
@@ -552,5 +710,3 @@ def main(df_OHLC_mid, num_candles=200,
     # fig.update_layout(xaxis_rangeslider_visible=False, showlegend=True)
     #
     # fig.show()
-
-    return 0
