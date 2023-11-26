@@ -5,7 +5,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
 DEBUG_PLOT = True
-DEBUG_PRINT = False
+DEBUG_PRINT = True
 
 def debug_logging(message, debug_print=DEBUG_PRINT):
     if debug_print:
@@ -100,10 +100,83 @@ def debug_plot_segments(df_PV, df_HL, df_segments):
     # Show the plot
     fig.show()
 
+def debug_plot_hubs(df_PV, df_HL, df_segments, df_hubs):
+
+    # Create a new figure
+    fig = go.Figure()
+
+    # calculate the hub directions
+    pre_hub_high = -1.
+    pre_hub_low = -1.
+    df_hubs['color'] = 'green'
+    for idx_hub, hub in df_hubs.iterrows():
+        cur_hub_high = hub['high']
+        cur_hub_low = hub['low']
+        if cur_hub_low > pre_hub_high:
+            df_hubs.at[idx_hub, 'direction'] = 'up'
+            df_hubs.at[idx_hub, 'color'] = 'green'
+        elif cur_hub_high < pre_hub_low:
+            df_hubs.at[idx_hub, 'direction'] = 'down'
+            df_hubs.at[idx_hub, 'color'] = 'red'
+        # update pre hub high and low
+        pre_hub_high = cur_hub_high
+        pre_hub_low = cur_hub_low
+
+
+    # Add bars for each direction in df_HL
+    fig.add_trace(go.Bar(x=df_HL.index,
+                         y=df_HL['High'] - df_HL['Low'],
+                         base=df_HL['Low'],
+                         marker_color=df_HL['direction'].apply(
+                             lambda x: 'green' if x == 'Bullish' else 'red'),
+                         name='Directional Bars',
+                         opacity=0.6))  # Adjusting opacity for better visualization
+
+    # Iterate over each segment
+    for _, row in df_segments.iterrows():
+        start_idx = row['idx_start']
+        end_idx = row['idx_end']
+
+        if end_idx not in df_PV.index or start_idx not in df_PV.index:
+            continue
+        else:
+            start_row = df_PV.loc[start_idx]
+            end_row = df_PV.loc[end_idx]
+            start_value = start_row['High'] if start_row['pv_type'] == 'Peak' else start_row['Low']
+            end_value = end_row['High'] if end_row['pv_type'] == 'Peak' else end_row['Low']
+
+        # Add a line trace for this segment
+        fig.add_trace(go.Scatter(x=[start_idx, end_idx],
+                                 y=[start_value, end_value],
+                                 mode='lines+markers',
+                                 line=dict(width=2, color='black')))
+
+    # Iterate over each hub to draw rectangles
+    for _, hub in df_hubs.iterrows():
+        hub_color = hub['color']
+
+        # Add a rectangle to represent the hub zone
+        fig.add_shape(type="rect",
+                      x0=hub['start_idx'], y0=hub['low'],
+                      x1=hub['end_idx'], y1=hub['high'],
+                      line=dict(color=hub_color),
+                      fillcolor=hub_color,
+                      opacity=0.2)
+
+    # Set layout options
+    fig.update_layout(title='Line Segments with Hubs',
+                      xaxis_title='Date',
+                      yaxis_title='Price',
+                      showlegend=False,
+                      xaxis_rangeslider_visible=False)
+
+    # Show the plot
+    fig.show()
+
+
 def apply_containing_pattern(df_OHLC_mid,
                              use_high_low=False,
                              debug_plot=DEBUG_PLOT,
-                             debug_print=DEBUG_PRINT,
                              ):
 
     ### --- Re-arrange the highs and lows
@@ -566,9 +639,10 @@ def find_segments(df_PV, df_HL, debug_plot=DEBUG_PLOT):
     return df_segments, df_PV_segments
 
 
-def find_hubs(df_PV_segments, df_HL, debug_plot=DEBUG_PLOT):
+def find_hubs(df_segments, df_PV_segments, df_HL, debug_plot=DEBUG_PLOT):
 
     # Simplify the df_PV_segments to only contain essential values
+    df_PV_segments_orig = df_PV_segments.copy()
     df_PV_segments['factor_value'] = np.where(df_PV_segments['pv_type'] == 'Peak',
                                               df_PV_segments['High'],
                                               df_PV_segments['Low'])
@@ -579,80 +653,109 @@ def find_hubs(df_PV_segments, df_HL, debug_plot=DEBUG_PLOT):
     list_hubs = []
 
     # Define a function to check if two line segments overlap
-    def check_overlap(segment1, segment2):
-        return max(segment1[0], segment2[0]) <= min(segment1[1], segment2[1])
+    def check_new_hub_formation(factor_0_type, factor_0, factor_1, factor_2, factor_3):
+        hub_high = None
+        hub_low = None
+        is_new_hub = False
+        if factor_0_type == 'Valley':   ## for a down hub
+            is_new_hub = max(factor_0, factor_2) < min(factor_1, factor_3)
+            if is_new_hub:
+                hub_high = min(factor_1, factor_3)
+                hub_low = max(factor_0, factor_2)
+        elif factor_0_type == 'Peak':  ## for a up hub
+            is_new_hub = min(factor_0, factor_2) > max(factor_1, factor_3)
+            if is_new_hub:
+                hub_high = min(factor_0, factor_2)
+                hub_low = max(factor_1, factor_3)
+        return is_new_hub, hub_high, hub_low
 
-    # Loop through the segments to find the hubs
+    def check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
+        if factor_cur_type == 'Valley':
+            if factor_cur_value > cur_hub['high']:
+                return False
+            else:
+                return True
+        elif factor_cur_type == 'Peak':
+            if factor_cur_value < cur_hub['low']:
+                return False
+            else:
+                return True
+
+
+    # initialize state variables
     last_included_factor_idx = -1
+    in_hub = False
+    is_new_hub = False
+
     for i in range(len(df_PV_segments) - 3):
-        if i <= last_included_factor_idx:
+
+        debug_logging('Processing factor: ' + str(i))
+        if i < last_included_factor_idx:
             # Skip this iteration if it's part of an already processed hub
             continue
 
         # Get the current factor and the next three factors
-        current_factor = df_PV_segments.iloc[i]
-        next_factors = df_PV_segments.iloc[i + 1:i + 4]
+        factor_0 = df_PV_segments.iloc[i]['factor_value']
+        factor_1 = df_PV_segments.iloc[i + 1]['factor_value']
+        factor_2 = df_PV_segments.iloc[i + 2]['factor_value']
+        factor_3 = df_PV_segments.iloc[i + 3]['factor_value']
 
         # Determine if the next three lines overlap to form a hub
-        hub_start_idx = current_factor['Idx']
-        hub_high = None
-        hub_low = None
-        hub_direction = 'up' if current_factor['pv_type'] == 'Valley' else 'down'
+        factor_0_idx = df_PV_segments.index[i]
+        factor_3_idx = df_PV_segments.index[i + 3]
+        factor_0_type = df_PV_segments.iloc[i]['pv_type']
 
-        # Determine if the first three lines (current and next two factors) form a hub
-        if current_factor['pv_type'] == 'Valley':
-            # For a down hub, check if the high of the valley is overlapping with the low of the next peak
-            is_hub = check_overlap((current_factor['factor_value'], next_factors.iloc[0]['factor_value']),
-                                   (next_factors.iloc[1]['factor_value'], next_factors.iloc[2]['factor_value']))
-        else:
-            # For an up hub, check if the low of the peak is overlapping with the high of the next valley
-            is_hub = check_overlap((current_factor['factor_value'], next_factors.iloc[0]['factor_value']),
-                                   (next_factors.iloc[1]['factor_value'], next_factors.iloc[2]['factor_value']))
+        # Case 1 - if not in a hub, then check if a new hub is formed
+        if not in_hub:
 
-        if not is_hub:
-            continue  # Skip to next iteration if not a hub
+            # Determine if the first three lines (current and next two factors) form a hub
+            is_new_hub, hub_high, hub_low = check_new_hub_formation(factor_0_type, factor_0, factor_1, factor_2, factor_3)
 
+            # if no new hub can be formed, continue to the next iteration
+            if not is_new_hub:
+                continue  # Skip to next iteration if not a hub
+            # otherwise, define the new hub
+            else:
+                # If a new hub is formed, then set the state variables
+                in_hub = True
+                is_new_hub = False
+                cur_hub = {'start_idx': factor_0_idx,
+                           'end_idx': factor_3_idx,
+                           'direction': 'down' if factor_0_type == 'Valley' else 'up',
+                           'high': hub_high,
+                           'low': hub_low}
+                debug_logging(f'New hub formed from {factor_0_idx} to {factor_3_idx} with high {hub_high} and low {hub_low}')
 
-        # Check for overlap and define the hub's high and low
-        if hub_direction == 'down':
-            hub_high = min(current_factor['factor_value'], next_factors.iloc[0]['factor_value'])
-            hub_low = max(current_factor['factor_value'], next_factors.iloc[1]['factor_value'])
-        else:
-            hub_low = max(current_factor['factor_value'], next_factors.iloc[0]['factor_value'])
-            hub_high = min(current_factor['factor_value'], next_factors.iloc[1]['factor_value'])
+                # continue to check if the next few factors belong to this hub
+                for j in range(i + 4, len(df_PV_segments)):
+                    factor_cur_value = df_PV_segments.iloc[j]['factor_value']
+                    factor_cur_idx = df_PV_segments.index[j]
+                    factor_cur_type = df_PV_segments.iloc[j]['pv_type']
 
-        # Check if the hub's high and low overlap with the next line
-        if check_overlap((hub_low, hub_high), (next_factors.iloc[2]['factor_value'], next_factors.iloc[2]['factor_value'])):
-            # Expand the hub until a non-overlapping factor is found
-            for j in range(i + 4, len(df_PV_segments)):
-                next_factor = df_PV_segments.iloc[j]
-                if hub_direction == 'down':
-                    new_hub_high = min(hub_high, next_factor['factor_value'])
-                    new_hub_low = max(hub_low, next_factor['factor_value'])
-                else:
-                    new_hub_low = max(hub_low, next_factor['factor_value'])
-                    new_hub_high = min(hub_high, next_factor['factor_value'])
+                    # if the current factor belongs to the current hub, then update the hub
+                    if check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
+                        cur_hub['end_idx'] = factor_cur_idx
+                        debug_logging(f'Extended hub end to {factor_cur_idx}')
+                    else:
+                        # hub breaks
+                        in_hub = False
+                        debug_logging(f'Hub breaks at {factor_cur_idx}')
+                        list_hubs.append(cur_hub)
+                        last_included_factor_idx = j
+                        break
 
-                # Check if the new hub high and low still overlap
-                if not check_overlap((new_hub_low, new_hub_high), (hub_low, hub_high)):
-                    break
-                hub_high = new_hub_high
-                hub_low = new_hub_low
-                hub_end_idx = next_factor['Idx']
+    print(list_hubs)
+    df_hubs = pd.DataFrame(list_hubs)
 
-            # Add the hub to the list
-            list_hubs.append({'start_idx': hub_start_idx, 'end_idx': hub_end_idx, 'high': hub_high, 'low': hub_low,
-                              'direction': hub_direction})
+    # --- Visualization
+    if debug_plot:
+        debug_plot_hubs(df_PV_segments_orig, df_HL, df_segments, df_hubs)
 
-            last_included_factor_idx = df_PV_segments.index.get_loc(hub_end_idx)
-
-            print(f'Found hub from {hub_start_idx} to {hub_end_idx} with high {hub_high} and low {hub_low}')
-
-    return list_hubs
+    return df_hubs
 
 
 
-def main(df_OHLC_mid, num_candles=300,
+def main(df_OHLC_mid, num_candles=500,
          use_high_low=False):
 
     """ This mid-timeframe strategy is based on the Chan Theory and contains the following steps:
@@ -673,7 +776,7 @@ def main(df_OHLC_mid, num_candles=300,
     df_segments, df_PV_segments = find_segments(df_PV_raw, df_HL, debug_plot=True)
 
     # Step 3 - Identify hubs
-    list_hubs = find_hubs(df_PV_segments, df_HL, debug_plot=True)
+    list_hubs = find_hubs(df_segments, df_PV_segments, df_HL, debug_plot=True)
 
 
 
