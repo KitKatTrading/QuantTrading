@@ -64,6 +64,8 @@ def update_crypto_OHLC_from_binance(symbol, time_scale, num_recent_candles=100):
         '1w': Client.KLINE_INTERVAL_1WEEK,
         '1d': Client.KLINE_INTERVAL_1DAY,
         '12h': Client.KLINE_INTERVAL_12HOUR,
+        '8h': Client.KLINE_INTERVAL_8HOUR,
+        '4h': Client.KLINE_INTERVAL_4HOUR,
         '1h': Client.KLINE_INTERVAL_1HOUR,
         '5m': Client.KLINE_INTERVAL_5MINUTE
     }
@@ -186,9 +188,6 @@ if __name__ == '__main__':
 
     # check if there are repeated entries
     # assert len(name_symbols) == len(set(name_symbols)), "There are repeated entries in name_symbols"
-
-
-
 
     for name_symbol in name_symbols:
         print(f"Updating {name_symbol} {time_scale}")
