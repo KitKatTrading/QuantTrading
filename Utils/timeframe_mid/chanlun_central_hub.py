@@ -306,8 +306,8 @@ def debug_plot_hubs(df_PV, df_HL, df_OHLC, df_hubs):
 
     # Set layout options
     fig.update_layout(title='Chan Theory Central Zones (Hubs)',
-                      xaxis_title='Date',
-                      yaxis_title='Price',
+                      # xaxis_title='Date',
+                      # yaxis_title='Price',
                       showlegend=True,
                       legend=dict(orientation="h", y=1, yanchor="bottom", x=0.5, xanchor="center"),
                       xaxis_rangeslider_visible=False)
@@ -918,10 +918,56 @@ def pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC, debug_plot=DEBUG_PLO
     if len(df_hubs) < 2:
         return None
     else:
-        hub_last = df_hubs.iloc[-1]
+        hub_cur = df_hubs.iloc[-1]
         hub_prev = df_hubs.iloc[-2]
 
-    return None
+    # current price
+    cur_price = df_OHLC.iloc[-1]['Close']
+
+    # --- Check the relation between the two hubs
+    # Case 1 - the last hub is higher than the previous hub (up trend)
+    msg = 'No valid setup'
+    if hub_cur['low'] > hub_prev['high']:
+        if cur_price < hub_cur['low']:
+            msg = 'Pullback long setup'
+            return 1, msg  # pullback long setup
+        else:
+            return 0, msg  # no valid setup
+    # Case 2 - the last hub is lower than the previous one (down trend
+    elif hub_cur['high'] < hub_prev['low']:
+        if cur_price > hub_cur['high']:
+            msg = 'Pullback short setup'
+            return -1, msg  # pullback short setup
+        else:
+            return 0, msg  # no valid setup
+
+def pattern_setup_RSI_extreme(df_OHLC,
+                              thres_overbought=70,
+                              thres_oversold=30,
+                              debug_plot=DEBUG_PLOT):
+
+
+    import talib
+
+    # Ensure df_OHLC is a standalone DataFrame
+    df_OHLC = df_OHLC.copy()
+
+    # Calculate RSI
+    df_OHLC.loc[:, 'RSI'] = talib.RSI(df_OHLC['Close'], timeperiod=14)
+
+    # --- Check if RSI is at an extreme
+    if df_OHLC.iloc[-1]['RSI'] < thres_oversold:
+        msg = 'RSI oversold long setup'
+        return 1, msg  # long setup
+    elif df_OHLC.iloc[-1]['RSI'] > thres_overbought:
+        msg = 'RSI overbought long setup'
+        return -1, msg  # short setup
+    else:
+        msg = 'No valid setup'
+        return 0, msg  # no valid setup
+
+
+
 
 def main(df_OHLC_mid, num_candles=500, use_high_low=False):
 
@@ -947,39 +993,15 @@ def main(df_OHLC_mid, num_candles=500, use_high_low=False):
     df_hubs, fig_hubs = find_hubs(df_PV_segments, df_HL, df_OHLC_mid, debug_plot=True)
 
     # Step 4 - Identify trading setup
+    setup_decision_1, msg_1 = pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC_mid, debug_plot=DEBUG_PLOT)
+    print(f'Setup decision: {setup_decision_1}, {msg_1}')
 
+    setup_decision_2, msg_2 = pattern_setup_RSI_extreme(df_OHLC_mid, debug_plot=DEBUG_PLOT)
+    print(f'Setup decision: {setup_decision_2}, {msg_2}')
 
+    # Final decision
+    final_decision = setup_decision_1 * setup_decision_2
+    print(f'Final decision: {final_decision}') 
 
+    return final_decision
 
-
-    # Now df_peaks_valleys_combined is a DataFrame with the price, type, and original index (Date)
-
-    # # --- Visualization
-    # # Plot OHLC
-    # fig = go.Figure(data=[go.Candlestick(x=df_OHLC_mid.index,
-    #                                      open=df_OHLC_mid['Open'],
-    #                                      high=df_OHLC_mid['High'],
-    #                                      low=df_OHLC_mid['Low'],
-    #                                      close=df_OHLC_mid['Close'],
-    #                                      name='OHLC')])
-    #
-    # # Filter out peaks and valleys
-    # peaks = df_pv_combined[df_pv_combined['Type'] == 'Peak']
-    # valleys = df_pv_combined[df_pv_combined['Type'] == 'Valley']
-    #
-    # # Plot Peaks as scatter plot with larger markers
-    # fig.add_trace(go.Scatter(x=peaks.index, y=peaks['Price'], mode='markers',
-    #                          marker=dict(color='red', size=10), name='Peaks'))
-    #
-    # # Plot Valleys as scatter plot with larger markers
-    # fig.add_trace(go.Scatter(x=valleys.index, y=valleys['Price'], mode='markers',
-    #                          marker=dict(color='blue', size=10), name='Valleys'))
-    #
-    # # Add line plot connecting peaks and valleys
-    # fig.add_trace(go.Scatter(x=df_pv_combined.index, y=df_pv_combined['Price'], mode='lines',
-    #                          line=dict(color='black', dash='dash'), name='Peaks and Valleys'))
-    #
-    # # Adjust layout to remove slide bar and add legend
-    # fig.update_layout(xaxis_rangeslider_visible=False, showlegend=True)
-    #
-    # fig.show()

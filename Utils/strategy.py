@@ -48,8 +48,8 @@ class Strategy:
 
 if __name__ == '__main__':
     # Example usage
-    strategy_chanlun_12h = Strategy(name_symbol='RUNEUSDT', data_source='binance', name_strategy='chanlun_12h',
-                                    timeframe_high='1w', timeframe_mid='12h', timeframe_low='1h',
+    strategy_chanlun_12h = Strategy(name_symbol='AGLDUSDT', data_source='binance', name_strategy='chanlun_12h',
+                                    timeframe_high='1d', timeframe_mid='4h', timeframe_low='1h',
                                     function_high_timeframe='SMA_5_10_20_trend',
                                     function_mid_timeframe='chanlun_central_hub',
                                     function_low_timeframe='RSI_divergence',

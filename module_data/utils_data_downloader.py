@@ -179,12 +179,10 @@ if __name__ == '__main__':
                     'SNXUSDT', 'MKRUSDT', 'COMPUSDT', 'ENJUSDT', 'RENUSDT', 'CRVUSDT', 'BALUSDT', 'SKLUSDT',
                     'MANAUSDT', 'MASKUSDT', 'AXSUSDT', 'SXPUSDT', 'BANDUSDT', 'IOSTUSDT', 'CELRUSDT', 'OGNUSDT',
                     'REEFUSDT', 'DENTUSDT', 'RVNUSDT', 'DODOUSDT', 'HNTUSDT', 'CTKUSDT', 'TOMOUSDT', 'LITUSDT',
-                    'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'BTSUSDT', 'ARDRUSDT', 'SCUSDT',
-                    'DGBUSDT', 'STMXUSDT', 'HOTUSDT', 'DNTUSDT', 'ARDRUSDT', 'SCUSDT', 'DGBUSDT', 'STMXUSDT',
-                    'HOTUSDT', 'DNTUSDT', 'NKNUSDT', 'BLZUSDT', 'RLCUSDT', 'SNTUSDT', 'WAVESUSDT', 'LSKUSDT',
-                    'XEMUSDT', 'ZILUSDT', 'ZRXUSDT', 'REPUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT',
-                    'IOTAUSDT', 'BANDUSDT', 'NANOUSDT', 'ONTUSDT', 'OMGUSDT', 'ZRXUSDT', 'REPUSDT', 'ALGOUSDT',
-                    'NEOUSDT', 'QTUMUSDT', 'IOTAUSDT', 'BANDUSDT', 'NANOUSDT', 'ONTUSDT', 'OMGUSDT', 'ZRXUSDT']
+                    'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'BTSUSDT', 'DGBUSDT', 'STMXUSDT',
+                    'DNTUSDT', 'ARDRUSDT', 'SCUSDT', 'HOTUSDT', 'NKNUSDT', 'BLZUSDT', 'RLCUSDT', 'SNTUSDT', 'WAVESUSDT',
+                    'LSKUSDT', 'XEMUSDT', 'ZILUSDT', 'ZRXUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT',
+                    'IOTAUSDT', 'ONTUSDT', 'REPUSDT', 'NANOUSDT', 'OMGUSDT']
 
     # check if there are repeated entries
     # assert len(name_symbols) == len(set(name_symbols)), "There are repeated entries in name_symbols"
