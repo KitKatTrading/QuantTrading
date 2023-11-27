@@ -5,7 +5,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
 DEBUG_PLOT = False
-DEBUG_PRINT = False
+DEBUG_PRINT = True
 
 def debug_logging(message, debug_print=DEBUG_PRINT):
     if debug_print:
@@ -314,6 +314,8 @@ def debug_plot_hubs(df_PV, df_HL, df_OHLC, df_hubs):
 
     # Show the plot
     fig.show()
+
+    return fig
 
 def apply_containing_pattern(df_OHLC_mid,
                              use_high_low=False,
@@ -784,7 +786,6 @@ def find_segments(df_PV, df_HL, debug_plot=DEBUG_PLOT):
 
     return df_segments, df_PV_segments
 
-
 def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
 
     # Simplify the df_PV_segments to only contain essential values
@@ -827,11 +828,9 @@ def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
             else:
                 return True
 
-
     # initialize state variables
     last_included_factor_idx = -1
     in_hub = False
-    is_new_hub = False
 
     for i in range(1, len(df_PV_segments) - 3):
 
@@ -845,9 +844,9 @@ def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
         factor_1 = df_PV_segments.iloc[i + 1]['factor_value']
         factor_2 = df_PV_segments.iloc[i + 2]['factor_value']
         factor_3 = df_PV_segments.iloc[i + 3]['factor_value']
-
-        # Determine if the next three lines overlap to form a hub
         factor_0_idx = df_PV_segments.index[i]
+        factor_1_idx = df_PV_segments.index[i + 1]
+        factor_2_idx = df_PV_segments.index[i + 2]
         factor_3_idx = df_PV_segments.index[i + 3]
         factor_0_type = df_PV_segments.iloc[i]['pv_type']
 
@@ -864,9 +863,10 @@ def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
             else:
                 # If a new hub is formed, then set the state variables
                 in_hub = True
-                is_new_hub = False
                 cur_hub = {'start_idx': factor_0_idx,
                            'end_idx': factor_3_idx,
+                           'all_idx': [factor_0_idx, factor_1_idx, factor_2_idx, factor_3_idx],
+                           'num_segments': 3,
                            'direction': 'down' if factor_0_type == 'Valley' else 'up',
                            'high': hub_high,
                            'low': hub_low}
@@ -881,13 +881,23 @@ def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
                     # if the current factor belongs to the current hub, then update the hub
                     if check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
                         cur_hub['end_idx'] = factor_cur_idx
+                        cur_hub['num_segments'] += 1
+                        cur_hub['all_idx'].append(factor_cur_idx)
                         debug_logging(f'Extended hub end to {factor_cur_idx}')
                     else:
                         # hub breaks
                         in_hub = False
-                        debug_logging(f'Hub breaks at {factor_cur_idx}')
                         list_hubs.append(cur_hub)
                         last_included_factor_idx = j - 1
+                        debug_logging(f'Hub breaks at {factor_cur_idx}')
+                        break
+
+                    # case if it is the last factor
+                    if j == len(df_PV_segments) - 1:
+                        in_hub = False
+                        list_hubs.append(cur_hub)
+                        last_included_factor_idx = j
+                        debug_logging(f'Hub breaks at {factor_cur_idx}')
                         break
 
     print(list_hubs)
@@ -897,11 +907,21 @@ def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
     if debug_plot:
         # debug_plot_hubs_using_HL(df_PV_segments, df_HL, df_hubs)
         # debug_plot_hubs_using_OHLC(df_PV_segments, df_OHLC, df_hubs)
-        debug_plot_hubs(df_PV_segments, df_HL, df_OHLC, df_hubs)
+        fig_hubs = debug_plot_hubs(df_PV_segments, df_HL, df_OHLC, df_hubs)
 
-    return df_hubs
+    return df_hubs, fig_hubs
 
+def pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC, debug_plot=DEBUG_PLOT):
+    """ This function identifies the pullback trading setup for trending hubs"""
 
+    # Extract the last two hubs
+    if len(df_hubs) < 2:
+        return None
+    else:
+        hub_last = df_hubs.iloc[-1]
+        hub_prev = df_hubs.iloc[-2]
+
+    return None
 
 def main(df_OHLC_mid, num_candles=500, use_high_low=False):
 
@@ -924,7 +944,9 @@ def main(df_OHLC_mid, num_candles=500, use_high_low=False):
     _, df_PV_segments = find_segments(df_PV_raw, df_HL, debug_plot=DEBUG_PLOT)
 
     # Step 3 - Identify hubs
-    df_hubs = find_hubs(df_PV_segments, df_HL, df_OHLC_mid, debug_plot=True)
+    df_hubs, fig_hubs = find_hubs(df_PV_segments, df_HL, df_OHLC_mid, debug_plot=True)
+
+    # Step 4 - Identify trading setup
 
 
 
