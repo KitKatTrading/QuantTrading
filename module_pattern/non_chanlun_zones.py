@@ -121,21 +121,6 @@ def process_raw_peaks_and_valleys(df_pv_combined,
 
             df_pv_combined = pd.concat(new_rows, axis=1).transpose()
 
-        # Now df_pv_combined has updated rows with correct indices
-
-        # # Process peaks and valleys that are too close
-        # if too_close:
-        #     to_drop = []
-        #     for i in range(len(df_pv_combined) - 1):
-        #         if df_pv_combined.iloc[i + 1]['orig_index'] - df_pv_combined.iloc[i]['orig_index'] < min_pv_dist:
-        #             to_drop.append(i + 1)
-        #
-        #     # Drop the too close distance peaks and valleys
-        #     index_labels_to_drop = df_pv_combined.iloc[to_drop].index
-        #     df_pv_combined.drop(index_labels_to_drop, inplace=True)
-        #
-        #     df_pv_combined.to_csv('df_pv_combined_after_step2.csv')
-
 
 
     # Clean up helper columns

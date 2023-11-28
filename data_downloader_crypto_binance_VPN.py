@@ -9,12 +9,15 @@ import argparse  # Import argparse
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
-# Constants and API Credentials
+# import API keys
+import config_binance_vpn
+API_KEY = config_binance_vpn.gvars['API_KEY']
+API_SECRET = config_binance_vpn.gvars['API_SECRET']
+
+# Datetime formats and constants
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S+00:00"
 DATETIME_START = '2020-01-01 00:00:00+00:00'
-API_KEY = 'W2E6HCVZOw02CFyLN1UenrnBSKpO2DJybasoPR51vUcl3ZqLP9HeTbF4yLWTjKKa'
-API_SECRET = 'd4SWo9n2bGIZUhGfF1VAZQ1Yu6zJWnREQ8qd2517QX2m819ArNOsJgptQUNPz4xL'
-PATH_DATA = 'data_binance'
+PATH_DATA = 'module_data/data_binance'
 
 # Function to update symbol data from Binance
 def initilize_crypto_OHLC_from_binance(symbol, time_scale):
@@ -56,7 +59,7 @@ def initilize_crypto_OHLC_from_binance(symbol, time_scale):
 
     return data_binance_API
 
-def update_crypto_OHLC_from_binance(symbol, time_scale, num_recent_candles=100):
+def update_crypto_OHLC_from_binance(symbol, time_scale, num_recent_candles=200):
     client = Client(API_KEY, API_SECRET)
 
     # Mapping time_scale to binance interval
@@ -67,6 +70,8 @@ def update_crypto_OHLC_from_binance(symbol, time_scale, num_recent_candles=100):
         '8h': Client.KLINE_INTERVAL_8HOUR,
         '4h': Client.KLINE_INTERVAL_4HOUR,
         '1h': Client.KLINE_INTERVAL_1HOUR,
+        '30m': Client.KLINE_INTERVAL_30MINUTE,
+        '15m': Client.KLINE_INTERVAL_15MINUTE,
         '5m': Client.KLINE_INTERVAL_5MINUTE
     }
     type_binance_interval = interval_map.get(time_scale)
@@ -174,15 +179,12 @@ if __name__ == '__main__':
                     'AVAXUSDT', 'ATOMUSDT', 'UNIUSDT', 'APTUSDT', 'NEARUSDT', 'RUNEUSDT', 'OPUSDT', 'INJUSDT',
                     'LDOUSDT', 'EGLDUSDT', 'THETAUSDT', 'FTMUSDT', 'SANDUSDT', 'GALAUSDT', 'XTZUSDT', 'EOSUSDT',
                     'LTCUSDT', 'BCHUSDT', 'ZECUSDT', 'SEIUSDT', 'FILUSDT', 'DOTUSDT', 'LINKUSDT', 'AAVEUSDT',
-                    'OCEANUSDT', 'AGLDUSDT', 'TRBUSDT', 'ALICEUSDT', 'LUNAUSDT', 'ICPUSDT', 'XMRUSDT', 'XLMUSDT',
+                    'OCEANUSDT', 'AGLDUSDT', 'TRBUSDT', 'ALICEUSDT', 'XMRUSDT', 'XLMUSDT',
                     'VETUSDT', 'SUSHIUSDT', 'KSMUSDT', 'GRTUSDT', '1INCHUSDT', 'ZENUSDT', 'YFIUSDT', 'BATUSDT',
-                    'SNXUSDT', 'MKRUSDT', 'COMPUSDT', 'ENJUSDT', 'RENUSDT', 'CRVUSDT', 'BALUSDT', 'SKLUSDT',
-                    'MANAUSDT', 'MASKUSDT', 'AXSUSDT', 'SXPUSDT', 'BANDUSDT', 'IOSTUSDT', 'CELRUSDT', 'OGNUSDT',
-                    'REEFUSDT', 'DENTUSDT', 'RVNUSDT', 'DODOUSDT', 'HNTUSDT', 'CTKUSDT', 'TOMOUSDT', 'LITUSDT',
-                    'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'BTSUSDT', 'DGBUSDT', 'STMXUSDT',
-                    'DNTUSDT', 'ARDRUSDT', 'SCUSDT', 'HOTUSDT', 'NKNUSDT', 'BLZUSDT', 'RLCUSDT', 'SNTUSDT', 'WAVESUSDT',
-                    'LSKUSDT', 'XEMUSDT', 'ZILUSDT', 'ZRXUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT',
-                    'IOTAUSDT', 'ONTUSDT', 'REPUSDT', 'NANOUSDT', 'OMGUSDT']
+                    'SNXUSDT', 'MKRUSDT', 'COMPUSDT', 'ENJUSDT', 'RENUSDT', 'CRVUSDT', 'MANAUSDT', 'MASKUSDT',
+                    'CELRUSDT', 'OGNUSDT', 'REEFUSDT', 'DENTUSDT', 'RVNUSDT', 'DODOUSDT', 'HNTUSDT', 'TOMOUSDT',
+                    'LITUSDT', 'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'HOTUSDT', 'NKNUSDT',
+                    'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
 
     # check if there are repeated entries
     # assert len(name_symbols) == len(set(name_symbols)), "There are repeated entries in name_symbols"

@@ -5,7 +5,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
 DEBUG_PLOT = False
-DEBUG_PRINT = True
+DEBUG_PRINT = False
 
 def debug_logging(message, debug_print=DEBUG_PRINT):
     if debug_print:
@@ -942,11 +942,11 @@ def pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC, debug_plot=DEBUG_PLO
             return 0, msg  # no valid setup
 
 def pattern_setup_RSI_extreme(df_OHLC,
-                              thres_overbought=70,
-                              thres_oversold=30,
+                              thres_overbought=65,
+                              thres_oversold=35,
+                              duration_overbought=6,
+                              duration_oversold=6,
                               debug_plot=DEBUG_PLOT):
-
-
     import talib
 
     # Ensure df_OHLC is a standalone DataFrame
@@ -955,18 +955,41 @@ def pattern_setup_RSI_extreme(df_OHLC,
     # Calculate RSI
     df_OHLC.loc[:, 'RSI'] = talib.RSI(df_OHLC['Close'], timeperiod=14)
 
+    # label the RSI values that are overbought or oversold
+    df_OHLC.loc[:, 'RSI_overbought'] = 0
+    df_OHLC.loc[:, 'RSI_oversold'] = 0
+    df_OHLC.loc[df_OHLC['RSI'] > thres_overbought, 'RSI_overbought'] = 1
+    df_OHLC.loc[df_OHLC['RSI'] < thres_oversold, 'RSI_oversold'] = 1
+
+    # Propagate the RSI values
+    def propagate_values(df, len_prop):
+        df.columns = ['value']
+        i = 0
+        while i < len(df):
+            if df.iloc[i]['value'] != 0:
+                value = df.iloc[i]['value']
+                j = 1
+                while j < len_prop + 1 and i + j < len(df) and df.iloc[i + j]['value'] == 0:
+                    df.at[df.index[i + j], 'value'] = value
+                    j += 1
+                i += j
+            else:
+                i += 1
+        return df['value']
+
+    df_OHLC.loc[:, 'RSI_overbought_propagated'] = propagate_values(df_OHLC[['RSI_overbought']], duration_overbought)
+    df_OHLC.loc[:, 'RSI_oversold_propagated'] = propagate_values(df_OHLC[['RSI_oversold']], duration_oversold)
+
     # --- Check if RSI is at an extreme
-    if df_OHLC.iloc[-1]['RSI'] < thres_oversold:
+    if df_OHLC.iloc[-1]['RSI_oversold_propagated'] == 1:
         msg = 'RSI oversold long setup'
         return 1, msg  # long setup
-    elif df_OHLC.iloc[-1]['RSI'] > thres_overbought:
+    elif df_OHLC.iloc[-1]['RSI_overbought_propagated'] == 1:
         msg = 'RSI overbought long setup'
         return -1, msg  # short setup
     else:
-        msg = 'No valid setup'
+        msg = 'No valid RSI overbought/sold setup'
         return 0, msg  # no valid setup
-
-
 
 
 def main(df_OHLC_mid, num_candles=500, use_high_low=False):
@@ -994,14 +1017,14 @@ def main(df_OHLC_mid, num_candles=500, use_high_low=False):
 
     # Step 4 - Identify trading setup
     setup_decision_1, msg_1 = pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC_mid, debug_plot=DEBUG_PLOT)
-    print(f'Setup decision: {setup_decision_1}, {msg_1}')
+    debug_logging(f'Setup decision 1: {setup_decision_1}, {msg_1}')
 
     setup_decision_2, msg_2 = pattern_setup_RSI_extreme(df_OHLC_mid, debug_plot=DEBUG_PLOT)
-    print(f'Setup decision: {setup_decision_2}, {msg_2}')
+    debug_logging(f'Setup decision 2: {setup_decision_2}, {msg_2}')
 
     # Final decision
     final_decision = setup_decision_1 * setup_decision_2
-    print(f'Final decision: {final_decision}') 
+    debug_logging(f'Final setup decision: {final_decision}')
 
     return final_decision
 
