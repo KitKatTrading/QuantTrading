@@ -1026,5 +1026,5 @@ def main(df_OHLC_mid, num_candles=500, use_high_low=False):
     final_decision = setup_decision_1 * setup_decision_2
     debug_logging(f'Final setup decision: {final_decision}')
 
-    return final_decision
+    return final_decision, fig_hubs
 

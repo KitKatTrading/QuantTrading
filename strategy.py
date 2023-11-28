@@ -11,6 +11,7 @@ dir_data = os.path.normpath(dir_data)
 class Strategy:
     def __init__(self, name_symbol, data_source, name_strategy, timeframe_high, timeframe_mid, timeframe_low,
                  function_high_timeframe, function_mid_timeframe, function_low_timeframe):
+
         self.name_symbol = name_symbol
         self.data_source = data_source
         self.name_strategy = name_strategy
@@ -20,6 +21,9 @@ class Strategy:
         self.function_high_timeframe = function_high_timeframe
         self.function_mid_timeframe = function_mid_timeframe
         self.function_low_timeframe = function_low_timeframe
+        self.high_timeframe_analysis = None
+        self.mid_timeframe_analysis = None
+        self.low_timeframe_analysis = None
         self.direction_module_decision = 0
         self.pattern_module_decision = 0
         self.entry_module_decision = 0
@@ -34,42 +38,53 @@ class Strategy:
         self.strategy_mid_timeframe = importlib.import_module(f"module_pattern.{self.function_mid_timeframe}")
         self.strategy_low_timeframe = importlib.import_module(f"module_entry.{self.function_low_timeframe}")
 
-    def high_timeframe_analysis(self):
-        file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_high + '.csv')
-        pd_OHLC_high = pd.read_csv(file_path, index_col=0)
+    def run_direction_module_live(self, use_default_data=True, df_OHLC_high=None):
+
+        if use_default_data:
+            file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_high + '.csv')
+            df_OHLC_high = pd.read_csv(file_path, index_col=0)
+        else:
+            df_OHLC_high = df_OHLC_high
 
         # Call the 'main' function from the strategy module
-        self.direction_module_decision = self.strategy_high_timeframe.main(pd_OHLC_high)
+        self.direction_module_decision = self.strategy_high_timeframe.main(df_OHLC_high)
 
-    def mid_timeframe_analysis(self):
-        file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_mid + '.csv')
-        pd_OHLC_mid = pd.read_csv(file_path, index_col=0)
+    def run_pattern_module(self, use_default_data=True, df_OHLC_mid=None):
 
-        # Call the 'main' function from the strategy module
-        self.pattern_module_decision = self.strategy_mid_timeframe.main(pd_OHLC_mid)
-
-    def low_timeframe_analysis(self):
-        file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_mid + '.csv')
-        pd_OHLC_mid = pd.read_csv(file_path, index_col=0)
+        if use_default_data:
+            file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_mid + '.csv')
+            df_OHLC_mid = pd.read_csv(file_path, index_col=0)
+        else:
+            df_OHLC_mid = df_OHLC_mid
 
         # Call the 'main' function from the strategy module
-        self.entry_module_decision = self.strategy_low_timeframe.main(pd_OHLC_mid)
+        self.pattern_module_decision = self.strategy_mid_timeframe.main(df_OHLC_mid)
 
+    def run_entry_module(self, use_default_data=True, df_OHLC_low=None):
 
-    def check_trading_decision(self):
+        if use_default_data:
+            file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_low + '.csv')
+            df_OHLC_low = pd.read_csv(file_path, index_col=0)
+        else:
+            df_OHLC_low = df_OHLC_low
 
+        # Call the 'main' function from the strategy module
+        self.entry_module_decision = self.strategy_low_timeframe.main(df_OHLC_low)
+
+    def check_ultimate_decision_all_modules(self):
+        """ This function checks the trading decision based on all three modules"""
         trading_decision = 0
 
         # directional module analysis
-        self.high_timeframe_analysis()
+        self.run_direction_module_live()
 
         # only run pattern analysis if directional module analysis is not 0
         if self.direction_module_decision != 0:
-            self.mid_timeframe_analysis()
+            self.run_pattern_module()
 
             # only run trade entry module if both directional and pattern modules are meaningful:
             if self.pattern_module_decision * self.direction_module_decision == 1:
-                self.low_timeframe_analysis()
+                self.run_entry_module()
 
                 # Checking long setup opportunity:
                 if self.direction_module_decision == 1 and self.pattern_module_decision == 1 and self.entry_module_decision == 1:
@@ -86,6 +101,26 @@ class Strategy:
                     print('No trading opportunity')
 
         return trading_decision
+
+    def check_trading_setup(self):
+        """ This function checks the trading setup opportunity, without considering the entry module"""
+        trading_setup = 0
+
+        # directional module analysis
+        self.run_direction_module_live()
+
+        # only run pattern analysis if directional module analysis is not 0
+        if self.direction_module_decision != 0:
+            self.run_pattern_module()
+
+            # if both directional and pattern modules are ready, update watchlist
+            if self.pattern_module_decision * self.direction_module_decision == 1:
+                trading_setup = 1
+
+        return trading_setup
+
+
+
 
 if __name__ == '__main__':
 

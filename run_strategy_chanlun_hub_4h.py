@@ -6,7 +6,7 @@ strategy_chanlun_12h = Strategy(name_symbol='OPUSDT', data_source='binance', nam
                                 function_mid_timeframe='chanlun_central_hub',
                                 function_low_timeframe='RSI_divergence')
 
-trading_decision = strategy_chanlun_12h.check_trading_opportunity()
+trading_decision = strategy_chanlun_12h.check_trading_decision_all_modules()
 
 print(trading_decision)
 
