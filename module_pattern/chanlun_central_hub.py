@@ -909,7 +909,10 @@ def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
         # debug_plot_hubs_using_OHLC(df_PV_segments, df_OHLC, df_hubs)
         fig_hubs = debug_plot_hubs(df_PV_segments, df_HL, df_OHLC, df_hubs)
 
-    return df_hubs, fig_hubs
+    if debug_plot:
+        return df_hubs, fig_hubs
+    else:
+        return df_hubs
 
 def pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC, debug_plot=DEBUG_PLOT):
     """ This function identifies the pullback trading setup for trending hubs"""
@@ -992,7 +995,11 @@ def pattern_setup_RSI_extreme(df_OHLC,
         return 0, msg  # no valid setup
 
 
-def main(df_OHLC_mid, num_candles=500, use_high_low=False):
+def main(df_OHLC_mid,
+         num_candles=500,
+         debug_plot=False,
+         debug_print=False,
+         use_high_low=False):
 
     """ This mid-timeframe strategy is based on the Chan Theory and contains the following steps:
     Step 1. Process the OHLC data with containing patterns. (包含关系)
@@ -1006,20 +1013,20 @@ def main(df_OHLC_mid, num_candles=500, use_high_low=False):
     df_OHLC_mid = df_OHLC_mid.iloc[-num_candles:]
 
     # Step 1 - Apply containing patterns
-    df_HL = apply_containing_pattern(df_OHLC_mid, use_high_low=use_high_low, debug_plot=DEBUG_PLOT)
+    df_HL = apply_containing_pattern(df_OHLC_mid, use_high_low=use_high_low, debug_plot=debug_plot)
 
     # Step 2 - Extract line/segment peak/valleys
-    df_PV_raw = find_raw_peaks_valleys(df_HL, debug_plot=DEBUG_PLOT)
-    _, df_PV_segments = find_segments(df_PV_raw, df_HL, debug_plot=DEBUG_PLOT)
+    df_PV_raw = find_raw_peaks_valleys(df_HL, debug_plot=debug_plot)
+    _, df_PV_segments = find_segments(df_PV_raw, df_HL, debug_plot=debug_plot)
 
     # Step 3 - Identify hubs
     df_hubs, fig_hubs = find_hubs(df_PV_segments, df_HL, df_OHLC_mid, debug_plot=True)
 
     # Step 4 - Identify trading setup
-    setup_decision_1, msg_1 = pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC_mid, debug_plot=DEBUG_PLOT)
+    setup_decision_1, msg_1 = pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC_mid, debug_plot=True)
     debug_logging(f'Setup decision 1: {setup_decision_1}, {msg_1}')
 
-    setup_decision_2, msg_2 = pattern_setup_RSI_extreme(df_OHLC_mid, debug_plot=DEBUG_PLOT)
+    setup_decision_2, msg_2 = pattern_setup_RSI_extreme(df_OHLC_mid, debug_plot=debug_plot)
     debug_logging(f'Setup decision 2: {setup_decision_2}, {msg_2}')
 
     # Final decision

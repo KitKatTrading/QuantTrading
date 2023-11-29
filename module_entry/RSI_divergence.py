@@ -2,6 +2,7 @@ import plotly
 import os
 import datetime
 import numpy as np
+import pandas as pd
 import talib
 from scipy.signal import argrelextrema
 import plotly.graph_objects as go
@@ -53,7 +54,7 @@ def find_divergence(
 ):
 
     # set date format
-    date_format = "%Y-%m-%dT%H:%M:%S%z"
+    date_format = "%Y-%m-%d %H:%M:%S+00:00"
     date_format_filename = "%Y_%m_%d_%H_%M_%S"
 
     # start testing
@@ -253,23 +254,26 @@ def find_divergence(
     else:
         return [], data_temp['flag_bull_divergence'], data_temp['flag_bear_divergence']
 
-def compute_indicator(pd_data):
+def compute_indicator(pd_data, plot_results=0, save_results=0, num_candles=200, thres_pv_local_extreme=5, do_propagation=True):
     pd_data = pd_data.copy()
     pd_data['RSI'] = talib.RSI(pd_data['Close'], 14)
     pd_data = pd_data.dropna()
     fig, pd_data_long, pd_data_short = find_divergence(
         pd_data, 'RSI',
-        thres_pv_local_extreme=5,
+        thres_pv_local_extreme=thres_pv_local_extreme,
         thres_bull_divergence_deflection=1,
         thres_bear_divergence_deflection=1,
-        num_candles=100,
-        plot_results=1,
-        save_results=1)
+        num_candles=num_candles,
+        plot_results=plot_results,
+        save_results=save_results)
 
     pd_data_RSI = pd_data_long - pd_data_short
     pd_data_RSI = pd_data_RSI.to_frame()
     pd_data_RSI.columns = ['value']
-    propagate_values(pd_data_RSI, 2)
+
+    if do_propagation:
+       propagate_values(pd_data_RSI, 2)
+
     my_series = pd_data_RSI.squeeze()
 
     return my_series
@@ -287,12 +291,28 @@ def propagate_values(df, len_prop):
         else:
             i += 1
 
-def main(df_OHLC, num_candles=200):
+def main(df_OHLC, num_candles=200, run_mode='live'):
 
-    # slice the DataFrame to the last 'num_candles' candles
-    df_OHLC = df_OHLC.iloc[-num_candles:]
+    if run_mode == 'live':
 
-    # compute the indicator
-    my_series = compute_indicator(df_OHLC)
+        # slice the DataFrame to the last 'num_candles' candles
+        df_OHLC = df_OHLC.iloc[-num_candles:]
 
-    return my_series.iloc[-1]
+        # compute the indicator
+        my_series = compute_indicator(df_OHLC, plot_results=0, save_results=0, num_candles=num_candles,
+                                      thres_pv_local_extreme=5)
+
+        return my_series.iloc[-1]
+
+    elif run_mode == 'backtest':
+
+        df_decision = pd.DataFrame(0, index=df_OHLC.index, columns=['value'])
+        my_series = compute_indicator(df_OHLC, plot_results=0, save_results=0, num_candles=num_candles,
+                                      thres_pv_local_extreme=5, do_propagation=False)
+
+        df_decision['value'] = my_series
+        df_decision.dropna(inplace=True)
+
+        return df_decision
+
+
