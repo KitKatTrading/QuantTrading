@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import importlib
 
+from utils import *
 from strategy import Strategy
 
 # Adjust dir_data and add dir_utils to the Python path
@@ -39,8 +40,6 @@ def convert_to_higher_timeframe(cur_date_low_timeframe, higher_timeframe):
         raise ValueError("Unsupported higher timeframe")
 
     return converted_datetime
-
-
 
 
 class Backtesting:
@@ -107,7 +106,6 @@ class Backtesting:
         # First check long trades
         # loop through the entry module, and verify direction and pattern modules
         for rows, columns in df_decision_entry_long.iterrows():
-            print(rows, columns['value'])
 
             # get the current date
             cur_date_low_timeframe = rows
@@ -131,31 +129,18 @@ class Backtesting:
                 # now check the pattern module
                 df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe]
                 pattern_module_decision, fig_hubs = self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp,
-                                                                                              debug_plot=False,
                                                                                               num_candles=300)
 
                 if pattern_module_decision == 1:
-                    print('Long trading opportunity')
+                    debug_logging('Long trading opportunity')
+                    debug_logging(f"high_timeframe = {cur_date_high_timeframe}")
+                    debug_logging(f"mid_timeframe = {cur_date_mid_timeframe}")
+                    debug_logging(f"low_timeframe = {cur_date_low_timeframe}")
+                    fig_hubs.show()
                     trading_decision = 1
                     #### Trading module ####
                 else:
-                    print('Pattern module not satisfied')
-
-
-
-
-
-        # for rows, columns in df_decision_direction.iterrows():
-        #     if columns['value'] == 0:
-        #         print('Buy')
-
-
-        # # # Run the pattern module
-        #
-        # df_decision_setup = self.strategy.strategy_mid_timeframe.main(df_OHLC_mid, run_mode='backtest')
-
-
-
+                    debug_logging('Pattern module not satisfied')
 
 
 
@@ -174,6 +159,5 @@ if __name__ == '__main__':
     # Run the backtesting
     trading_decision = backtesting.run_backtesting_iterative()
 
-    print(trading_decision)
+    debug_logging(trading_decision)
 
-    print('Done!')
