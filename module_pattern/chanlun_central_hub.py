@@ -371,7 +371,7 @@ def apply_containing_pattern(df_OHLC_mid,
 
         # Print counter
         counter_processing += 1
-        debug_logging(f'Processing containing patterns, round {counter_processing}')
+        # debug_logging(f'Processing containing patterns, round {counter_processing}')
 
         # Further processing starts here. First identify the first containing candle.
         df_HL['is_contained_to_process'] = False
@@ -508,7 +508,7 @@ def refine_peaks_valleys(df_PV, df_HL, debug_plot=DEBUG_PLOT):
         clusters = []
         cluster_start = None
         for i in range(0, len(df_PV)):
-            debug_logging(f'Processing {i}th factor')
+            # debug_logging(f'Processing {i}th factor')
 
             # if the current factor is the first factor
             if i == 0:
@@ -548,8 +548,8 @@ def refine_peaks_valleys(df_PV, df_HL, debug_plot=DEBUG_PLOT):
         # --- Process one by one factor in each cluster
         index_to_remove = []
         cluster = clusters[0]
-        debug_logging(f'Processing cluster: {cluster}')
-        debug_logging(f'Index cluster: {df_PV.iloc[cluster[0]:cluster[1]+1].index.tolist()}')
+        # debug_logging(f'Processing cluster: {cluster}')
+        # debug_logging(f'Index cluster: {df_PV.iloc[cluster[0]:cluster[1]+1].index.tolist()}')
 
         # if the first factor is a peak
         if df_PV.iloc[cluster[0]]['pv_type'] == 'Peak':
@@ -867,7 +867,7 @@ def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
                            'direction': 'down' if factor_0_type == 'Valley' else 'up',
                            'high': hub_high,
                            'low': hub_low}
-                debug_logging(f'New hub formed from {factor_0_idx} to {factor_3_idx} with high {hub_high} and low {hub_low}')
+                # debug_logging(f'New hub formed from {factor_0_idx} to {factor_3_idx} with high {hub_high} and low {hub_low}')
 
                 # continue to check if the next few factors belong to this hub
                 for j in range(i + 4, len(df_PV_segments)):
@@ -880,13 +880,13 @@ def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
                         cur_hub['end_idx'] = factor_cur_idx
                         cur_hub['num_segments'] += 1
                         cur_hub['all_idx'].append(factor_cur_idx)
-                        debug_logging(f'Extended hub end to {factor_cur_idx}')
+                        # debug_logging(f'Extended hub end to {factor_cur_idx}')
                     else:
                         # hub breaks
                         in_hub = False
                         list_hubs.append(cur_hub)
                         last_included_factor_idx = j - 1
-                        debug_logging(f'Hub breaks at {factor_cur_idx}')
+                        # debug_logging(f'Hub breaks at {factor_cur_idx}')
                         break
 
                     # case if it is the last factor
@@ -894,7 +894,7 @@ def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
                         in_hub = False
                         list_hubs.append(cur_hub)
                         last_included_factor_idx = j
-                        debug_logging(f'Hub breaks at {factor_cur_idx}')
+                        # debug_logging(f'Hub breaks at {factor_cur_idx}')
                         break
 
     debug_logging(list_hubs)
@@ -924,15 +924,15 @@ def pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC, debug_plot=DEBUG_PLO
     # --- Check the relation between the two hubs
     # Case 1 - the last hub is higher than the previous hub (up trend)
     msg = 'No valid setup'
-    if hub_cur['low'] > hub_prev['high']:
-        if cur_price < hub_cur['low']:
+    if hub_cur['low'] > hub_prev['high']:  # up trending hubs
+        if cur_price < hub_cur['high']:   # loose condition, if price lower than the current high, OK
             msg = 'Pullback long setup'
             return 1, msg  # pullback long setup
         else:
             return 0, msg  # no valid setup
-    # Case 2 - the last hub is lower than the previous one (down trend
-    elif hub_cur['high'] < hub_prev['low']:
-        if cur_price > hub_cur['high']:
+    # Case 2 - the last hub is lower than the previous one (down trend)
+    elif hub_cur['high'] < hub_prev['low']:  # down trending hubs
+        if cur_price > hub_cur['low']:  # loose condition, if price higher than the current low, OK
             msg = 'Pullback short setup'
             return -1, msg  # pullback short setup
         else:
@@ -991,15 +991,18 @@ def pattern_setup_RSI_extreme(df_OHLC,
 
 def main(df_OHLC_mid,
          num_candles=500,
+         # require_RSI_extreme=False,
          debug_plot=False,
          use_high_low=False):
 
     """ This mid-timeframe strategy is based on the Chan Theory and contains the following steps:
+    # Updated on 2023-12-02
     Step 1. Process the OHLC data with containing patterns. (包含关系)
     Step 2. Find peaks and valleys (fractal tops and bottoms) (顶底分型以及线段)
     Step 3. Find central zones (hubs) (寻找中枢）
     Step 4. Identify the trading setup (根据中枢分布决定交易形态）
-
+    Step 4.1. confirm at least two trending hubs (确认至少两个趋势中枢)
+    Step 4.2. then trigger the setup when the price is below the edge of the current hub (e.g. < hub high for Long).
     """
 
     # slice the DataFrame to the last 'num_candles' candles
@@ -1019,16 +1022,23 @@ def main(df_OHLC_mid,
     setup_decision_1, msg_1 = pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC_mid, debug_plot=True)
     debug_logging(f'Setup decision 1: {setup_decision_1}, {msg_1}')
 
-    setup_decision_2, msg_2 = pattern_setup_RSI_extreme(df_OHLC_mid, debug_plot=True)
-    debug_logging(f'Setup decision 2: {setup_decision_2}, {msg_2}')
+    # if require_RSI_extreme:
+    #     setup_decision_2, msg_2 = pattern_setup_RSI_extreme(df_OHLC_mid, debug_plot=True)
+    #     debug_logging(f'Setup decision 2: {setup_decision_2}, {msg_2}')
+    # else:
+    #     setup_decision_2 = setup_decision_1
+    #     # msg_2 = 'No RSI extreme requirement'
 
     # Final decision
-    if setup_decision_1 == 1 and setup_decision_2 == 1:
-        final_decision = 1
-    elif setup_decision_1 == -1 and setup_decision_2 == -1:
-        final_decision = -1
-    else:
-        final_decision = 0
+    # if setup_decision_1 == 1 and setup_decision_2 == 1:
+    #     final_decision = 1
+    # elif setup_decision_1 == -1 and setup_decision_2 == -1:
+    #     final_decision = -1
+    # else:
+    #     final_decision = 0
+
+    # make the final decision
+    final_decision = setup_decision_1
 
     debug_logging(f'Final setup decision: {final_decision}')
 

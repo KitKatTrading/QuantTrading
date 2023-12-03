@@ -59,7 +59,7 @@ def initilize_crypto_OHLC_from_binance(symbol, time_scale):
 
     return data_binance_API
 
-def update_crypto_OHLC_from_binance(symbol, time_scale, num_recent_candles=200):
+def update_crypto_OHLC_from_binance(symbol, time_scale, num_recent_candles=500):
     client = Client(API_KEY, API_SECRET)
 
     # Mapping time_scale to binance interval
@@ -192,5 +192,7 @@ if __name__ == '__main__':
     for name_symbol in name_symbols:
         print(f"Updating {name_symbol} {time_scale}")
         data = update_crypto_OHLC_from_binance(name_symbol, time_scale)
+
+
 
 

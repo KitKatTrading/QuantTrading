@@ -248,7 +248,8 @@ def find_divergence(
         # fig.show()
         if save_results == 1:
             date_test_end_str_filename = datetime.datetime.strptime(dates[-1], date_format).strftime(date_format_filename)
-            fig.write_image(os.path.join('Plot', 'Divergence', 'Bull_' + str(flag_bull_divergence) + '_Bear_' + str(flag_bear_divergence) + '_' + date_test_end_str_filename + '.png'), scale=1,width=1920, height=1080)
+            # fig.write_image(os.path.join('Plot', 'Divergence', 'Bull_' + str(flag_bull_divergence) + '_Bear_' + str(flag_bear_divergence) + '_' + date_test_end_str_filename + '.png'), scale=1,width=1920, height=1080)
+            fig.write_image(os.path.join('Bull_' + str(flag_bull_divergence) + '_Bear_' + str(flag_bear_divergence) + '_' + date_test_end_str_filename + '.png'), scale=1,width=1920, height=1080)
 
         return fig, data_temp['flag_bull_divergence'], data_temp['flag_bear_divergence']
     else:
@@ -276,7 +277,7 @@ def compute_indicator(pd_data, plot_results=0, save_results=0, num_candles=200, 
 
     my_series = pd_data_RSI.squeeze()
 
-    return my_series
+    return my_series, fig
 
 def propagate_values(df, len_prop):
     i = 0
@@ -299,20 +300,20 @@ def main(df_OHLC, num_candles=200, run_mode='live'):
         df_OHLC = df_OHLC.iloc[-num_candles:]
 
         # compute the indicator
-        my_series = compute_indicator(df_OHLC, plot_results=0, save_results=0, num_candles=num_candles,
+        my_series, fig = compute_indicator(df_OHLC, plot_results=1, save_results=1, num_candles=num_candles,
                                       thres_pv_local_extreme=5)
 
-        return my_series.iloc[-1]
+        return my_series.iloc[-1], fig
 
     elif run_mode == 'backtest':
 
         df_decision = pd.DataFrame(0, index=df_OHLC.index, columns=['value'])
-        my_series = compute_indicator(df_OHLC, plot_results=0, save_results=0, num_candles=num_candles,
+        my_series, fig = compute_indicator(df_OHLC, plot_results=1, save_results=1, num_candles=num_candles,
                                       thres_pv_local_extreme=5, do_propagation=False)
 
         df_decision['value'] = my_series
         df_decision.dropna(inplace=True)
 
-        return df_decision
+        return df_decision, fig
 
 
