@@ -1,7 +1,8 @@
 import os
 from datetime import datetime, timedelta
+import talib
 import pandas as pd
-import importlib
+# import importlib
 
 from utils import *
 from strategy import Strategy
@@ -96,6 +97,13 @@ class Backtesting:
         df_OHLC_low = pd.read_csv(file_path, index_col=0)
         df_OHLC_low = df_OHLC_low.loc[self.bt_start_date: self.bt_end_date]
 
+        # Customize this - run additional indicators that are needed latter
+        # Indicator #1: RSI and its EMA21
+        df_OHLC_low['RSI'] = talib.RSI(df_OHLC_low['Close'], timeperiod=14)
+        df_OHLC_low['RSI_EMA21'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=21)
+        df_OHLC_low.dropna(inplace=True)
+        df_OHLC_low = df_OHLC_low.iloc[200:]  # get rid of the first 200 candles which may have inaccurate RSI values
+
         ### ------------ Initialize entry log ------------ ###
         # Initialize the entry log
         df_entry_log = pd.DataFrame(0, index=df_OHLC_low.index,
@@ -137,69 +145,64 @@ class Backtesting:
             cur_date_low_timeframe = datetime_low
 
 
+            ### ------------ Direction module processing------------ ###
+
             # convert the low timeframe date to the open time of the corresponding high timeframe candle
             cur_date_high_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_high)
             cur_date_high_timeframe = cur_date_high_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
+            # get the decision from the direction module
+            decision_direction = df_decision_direction['value'].loc[cur_date_high_timeframe]
+            df_entry_log['decision_direction'].loc[cur_date_low_timeframe] = decision_direction
 
-            # if directional module decision is already vectorized, then just check the decision
-            if vectorize_directional_module_decision:
+            # skip if decision_direction is 0
+            if decision_direction == 0:
+                continue
 
-                # no active signal from directional module, pass
-                # else, proceed with the pattern module
-                if cur_date_high_timeframe not in df_decision_direction.index:
-                    continue
+            ### ------------ Pattern module processing------------ ###
+            # get the datetime for the mid timeframe and get rid of the open candle (for real time processing)
+            cur_date_mid_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_mid)
+            if self.timeframe_mid == "12h":
+                hours_offset_mid = 12
+            elif self.timeframe_mid == '4h':
+                hours_offset_mid = 4
+            cur_date_mid_timeframe = cur_date_mid_timeframe - timedelta(hours=hours_offset_mid)
+            cur_date_mid_timeframe = cur_date_mid_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
-                # log the potential entry
-                decision_direction = df_decision_direction['value'].loc[cur_date_high_timeframe]
-                df_entry_log['decision_direction'].loc[cur_date_low_timeframe] = decision_direction
+            # check the pattern module
+            df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe]
+            try:
+                decision_pattern, fig_hubs = (
+                    self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp, num_candles=500))
+                df_entry_log['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
+            except:
+                print(f"low_timeframe = {cur_date_low_timeframe}")
+                print('- error - pattern module not satisfied')
+                continue
 
-                # convert the date to the mid timeframe
-                cur_date_mid_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_mid)
+            if decision_pattern == decision_direction:
+                # now check the entry module - forward type of search
+                print('- potential trading setup:')
+                df_OHLC_low_temp = df_OHLC_low.iloc[idx_low: idx_low + hours_offset_mid * 2 + 1]
+                decision_entry, fig_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low_temp, run_mode='live')
 
-                # get rid of the open candle
-                if self.timeframe_mid == "12h":
-                    hours_offset_mid = 12
-                elif self.timeframe_mid == '4h':
-                    hours_offset_mid = 4
-                cur_date_mid_timeframe = cur_date_mid_timeframe - timedelta(hours=hours_offset_mid)
-                cur_date_mid_timeframe = cur_date_mid_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
+                if decision_entry == decision_pattern:
 
-
-                # now check the pattern module
-                df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe]
-                try:
-                    decision_pattern, fig_hubs = (
-                        self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp, num_candles=500))
-                    df_entry_log['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
-                except:
                     print(f"low_timeframe = {cur_date_low_timeframe}")
-                    print('- error - pattern module not satisfied')
-                    continue
+                    print(f"- mid_timeframe = {cur_date_mid_timeframe}")
+                    print(f"-- high_timeframe = {cur_date_high_timeframe}")
 
-                if decision_pattern == decision_direction:
-                    # now check the entry module - forward type of search
-                    print('- potential trading setup:')
-                    df_OHLC_low_temp = df_OHLC_low.iloc[idx_low: idx_low + hours_offset_mid * 2 + 1]
-                    decision_entry, fig_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low_temp, run_mode='live')
+                    fig_hubs.show()
+                    fig_entry.show()
 
-                    if decision_entry == decision_pattern:
-
-                        print(f"low_timeframe = {cur_date_low_timeframe}")
-                        print(f"- mid_timeframe = {cur_date_mid_timeframe}")
-                        print(f"-- high_timeframe = {cur_date_high_timeframe}")
-
-                        fig_hubs.show()
-                        fig_entry.show()
-
-                        ##### Trade  Execution Module ####
-
-                    else:
-                        print('- entry module not satisfied')
-
+                    ##### Trade  Execution Module ####
 
                 else:
-                    debug_logging('- pattern module not satisfied')
+                    print('- entry module not satisfied')
+
+
+            else:
+                debug_logging('- pattern module not satisfied')
 
 
 
@@ -211,7 +214,7 @@ if __name__ == '__main__':
                               timeframe_high='1w', timeframe_mid='12h', timeframe_low='1h',
                               function_high_timeframe='SMA_5_10_20_trend',
                               function_mid_timeframe='chanlun_central_hub',
-                              function_low_timeframe='RSI_divergence',
+                              function_low_timeframe='RSI_extreme_cross',
                               bt_start_date='2021-01-01 00:00:00+00:00',
                               bt_end_date='2023-11-01 00:00:00+00:00')
 
