@@ -75,67 +75,46 @@ class Backtesting:
                                  function_mid_timeframe=self.function_mid_timeframe,
                                  function_low_timeframe=self.function_low_timeframe)
 
-    def run_backtesting_iterative(self,
-                                  vectorize_directional_module_decision=True,
-                                  vectorize_decision_pattern=False,
-                                  vectorize_entry_module_decision=False,
-                                  ):
+    def run_backtesting_vectorize_high_low(self):
 
-        ### ------------ Load data ------------ ###
-        # Load the OHLC data for the high timeframe directional module
+        ### ------------ Process high timeframe data ------------ ###
+        # Load data
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_high + '.csv')
         df_OHLC_high = pd.read_csv(file_path, index_col=0)
         df_OHLC_high = df_OHLC_high.loc[self.bt_start_date: self.bt_end_date]
 
-        # Load the OHLC data for the mid timeframe pattern module
+        # Vectorize the high timeframe directional module decisions
+        df_decision_direction = self.strategy.strategy_high_timeframe.main(df_OHLC_high, run_mode='backtest')
+        df_decision_direction_long = df_decision_direction.loc[df_decision_direction['value'] == 1]
+        df_decision_direction_short = df_decision_direction.loc[df_decision_direction['value'] == -1]
+
+        ### ------------ Process mid timeframe data ------------ ###
+        # Load data
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_mid + '.csv')
         df_OHLC_mid = pd.read_csv(file_path, index_col=0)
         df_OHLC_mid = df_OHLC_mid.loc[self.bt_start_date: self.bt_end_date]
 
-        # Load the OHLC data for the low timeframe entry module
+        ### ------------ Process low timeframe data ------------ ###
+        # Load data
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_low + '.csv')
         df_OHLC_low = pd.read_csv(file_path, index_col=0)
         df_OHLC_low = df_OHLC_low.loc[self.bt_start_date: self.bt_end_date]
 
-        # Customize this - run additional indicators that are needed latter
+        # Customize indicators
         # Indicator #1: RSI and its EMA21
         df_OHLC_low['RSI'] = talib.RSI(df_OHLC_low['Close'], timeperiod=14)
         df_OHLC_low['RSI_EMA21'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=21)
         df_OHLC_low.dropna(inplace=True)
-        df_OHLC_low = df_OHLC_low.iloc[200:]  # get rid of the first 200 candles which may have inaccurate RSI values
+
+        # Vectorize the low timeframe entry module decisions
+        df_decision_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low, run_mode='backtest')
+        df_decision_entry_long = df_decision_entry.loc[df_decision_entry['decision'] == 1]
+        df_decision_entry_short = df_decision_entry.loc[df_decision_entry['decision'] == -1]
 
         ### ------------ Initialize entry log ------------ ###
         # Initialize the entry log
         df_entry_log = pd.DataFrame(0, index=df_OHLC_low.index,
                                     columns=['decision_direction', 'decision_pattern', 'decision_entry'])
-
-        ### ------------ Direction module ------------ ###
-        if vectorize_directional_module_decision:
-            print('Direction module vectorized')
-            # Run the direction module - if not possible to vectorize, will need to iterate through the lower DataFrame
-            df_decision_direction = self.strategy.strategy_high_timeframe.main(df_OHLC_high, run_mode='backtest')
-            df_decision_direction_long = df_decision_direction.loc[df_decision_direction['value'] == 1]
-            df_decision_direction_short = df_decision_direction.loc[df_decision_direction['value'] == -1]
-        else:
-            print('Direction module not vectorized, will be iterated')
-
-        ### ------------ Pattern module ------------ ###
-        if vectorize_decision_pattern:
-            print('Pattern module vectorized')
-            df_pattern_entry, fig_pattern = self.strategy.strategy_mid_timeframe.main(df_OHLC_low, run_mode='backtest')
-            df_pattern_entry_long = df_pattern_entry.loc[df_pattern_entry['value'] == 1]
-            df_pattern_entry_short = df_pattern_entry.loc[df_pattern_entry['value'] == -1]
-        else:
-            print('Pattern module not vectorized, will be iterated')
-
-        ### ------------ Entry module ------------ ###
-        if vectorize_entry_module_decision:
-            print('Entry module vectorized')
-            df_decision_entry, fig_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low, run_mode='backtest')
-            df_decision_entry_long = df_decision_entry.loc[df_decision_entry['value'] == 1]
-            df_decision_entry_short = df_decision_entry.loc[df_decision_entry['value'] == -1]
-        else:
-            print('Entry module not vectorized, will be iterated')
 
         ### ------------ Iterations ------------ ###
         # loop through the entry module, and verify direction and pattern modules
@@ -143,7 +122,7 @@ class Backtesting:
 
             # get the current date
             cur_date_low_timeframe = datetime_low
-
+            print(f"low_timeframe = {cur_date_low_timeframe}")
 
             ### ------------ Direction module processing------------ ###
 
@@ -158,6 +137,9 @@ class Backtesting:
             # skip if decision_direction is 0
             if decision_direction == 0:
                 continue
+            else:
+                print(f"- high_timeframe = {cur_date_high_timeframe}")
+                print(f"- decision_direction = {decision_direction}")
 
             ### ------------ Pattern module processing------------ ###
             # get the datetime for the mid timeframe and get rid of the open candle (for real time processing)
@@ -176,27 +158,25 @@ class Backtesting:
                     self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp, num_candles=500))
                 df_entry_log['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
             except:
-                print(f"low_timeframe = {cur_date_low_timeframe}")
                 print('- error - pattern module not satisfied')
                 continue
 
             if decision_pattern == decision_direction:
                 # now check the entry module - forward type of search
+                print(f"- mid_timeframe = {cur_date_mid_timeframe}")
                 print('- potential trading setup:')
                 df_OHLC_low_temp = df_OHLC_low.iloc[idx_low: idx_low + hours_offset_mid * 2 + 1]
-                decision_entry, fig_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low_temp, run_mode='live')
+                decision_entry, fig_entry, idx_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low_temp, run_mode='live')
+
+                if idx_low <= next_trade_entry_idx:
+                    continue
 
                 if decision_entry == decision_pattern:
-
-                    print(f"low_timeframe = {cur_date_low_timeframe}")
-                    print(f"- mid_timeframe = {cur_date_mid_timeframe}")
-                    print(f"-- high_timeframe = {cur_date_high_timeframe}")
-
+                    next_trade_entry_idx = idx_entry + idx_low
+                    df_entry_log['decision_entry'].iloc[next_trade_entry_idx] = decision_entry
                     fig_hubs.show()
                     fig_entry.show()
-
-                    ##### Trade  Execution Module ####
-
+                    print('- entry module satisfied')
                 else:
                     print('- entry module not satisfied')
 
@@ -219,7 +199,7 @@ if __name__ == '__main__':
                               bt_end_date='2023-11-01 00:00:00+00:00')
 
     # Run the backtesting
-    trading_decision = backtesting.run_backtesting_iterative()
+    trading_decision = backtesting.run_backtesting_vectorize_high_low()
 
     debug_logging(trading_decision)
 
