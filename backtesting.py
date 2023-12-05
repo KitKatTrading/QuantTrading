@@ -77,6 +77,10 @@ class Backtesting:
 
     def run_backtesting_vectorize_high_low(self):
 
+        # initialize the cooling down period
+        cooling_down_period = 12
+        cooling_down_counter = 0
+
         ### ------------ Process high timeframe data ------------ ###
         # Load data
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_high + '.csv')
@@ -111,17 +115,30 @@ class Backtesting:
         df_decision_entry_long = df_decision_entry.loc[df_decision_entry['decision'] == 1]
         df_decision_entry_short = df_decision_entry.loc[df_decision_entry['decision'] == -1]
 
+        # Save the csv for debugging
+        df_decision_entry.to_csv(os.path.join(self.backtesting_dir, 'decision_entry.csv'))
+        df_decision_entry_long.to_csv(os.path.join(self.backtesting_dir, 'df_decision_entry_long.csv'))
+        df_decision_entry_short.to_csv(os.path.join(self.backtesting_dir, 'df_decision_entry_short.csv'))
+
         ### ------------ Initialize entry log ------------ ###
         # Initialize the entry log
-        df_entry_log = pd.DataFrame(0, index=df_OHLC_low.index,
-                                    columns=['decision_direction', 'decision_pattern', 'decision_entry'])
+        df_entry_log_long = pd.DataFrame(0, index=df_OHLC_low.index,
+                                    columns=['decision_direction', 'decision_pattern', 'decision_entry', 'decision_final'])
 
         ### ------------ Iterations ------------ ###
-        # loop through the entry module, and verify direction and pattern modules
-        for idx_low, datetime_low in enumerate(df_OHLC_low.index):
+        """ Since we have vectorized the entry module, we can just loop through the identified entries"""
+
+        ### ------------ Long entries ------------ ###
+        for idx_low, datetime_low in enumerate(df_decision_entry_long.index):
+
+            # update the cooling down counter
+            if cooling_down_counter > 0:
+                cooling_down_counter -= 1
 
             # get the current date
             cur_date_low_timeframe = datetime_low
+            decision_entry = df_decision_entry_long['decision'].loc[cur_date_low_timeframe]
+            df_entry_log_long['decision_entry'].loc[cur_date_low_timeframe] = decision_entry
             print(f"low_timeframe = {cur_date_low_timeframe}")
 
             ### ------------ Direction module processing------------ ###
@@ -131,15 +148,19 @@ class Backtesting:
             cur_date_high_timeframe = cur_date_high_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
             # get the decision from the direction module
-            decision_direction = df_decision_direction['value'].loc[cur_date_high_timeframe]
-            df_entry_log['decision_direction'].loc[cur_date_low_timeframe] = decision_direction
+            try:
+                decision_direction = df_decision_direction['value'].loc[cur_date_high_timeframe]
+                df_entry_log_long['decision_direction'].loc[cur_date_low_timeframe] = decision_direction
+            except:
+                print(f"- high_timeframe = {cur_date_high_timeframe}")
+                print('- error - direction module not satisfied')
+                continue
 
-            # skip if decision_direction is 0
-            if decision_direction == 0:
+            # skip if decision_direction is not the same as the decision_entry
+            if decision_direction != decision_entry:
                 continue
             else:
                 print(f"- high_timeframe = {cur_date_high_timeframe}")
-                print(f"- decision_direction = {decision_direction}")
 
             ### ------------ Pattern module processing------------ ###
             # get the datetime for the mid timeframe and get rid of the open candle (for real time processing)
@@ -152,40 +173,32 @@ class Backtesting:
             cur_date_mid_timeframe = cur_date_mid_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
             # check the pattern module
-            df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe]
+            df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe].copy()
             try:
                 decision_pattern, fig_hubs = (
                     self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp, num_candles=500))
-                df_entry_log['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
+                df_entry_log_long['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
             except:
                 print('- error - pattern module not satisfied')
                 continue
 
-            if decision_pattern == decision_direction:
-                # now check the entry module - forward type of search
-                print(f"- mid_timeframe = {cur_date_mid_timeframe}")
-                print('- potential trading setup:')
-                df_OHLC_low_temp = df_OHLC_low.iloc[idx_low: idx_low + hours_offset_mid * 2 + 1]
-                decision_entry, fig_entry, idx_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low_temp, run_mode='live')
-
-                if idx_low <= next_trade_entry_idx:
+            if decision_pattern == decision_entry:
+                if cooling_down_counter > 0:
                     continue
-
-                if decision_entry == decision_pattern:
-                    next_trade_entry_idx = idx_entry + idx_low
-                    df_entry_log['decision_entry'].iloc[next_trade_entry_idx] = decision_entry
+                elif cooling_down_counter == 0:
+                    cooling_down_counter = cooling_down_period
+                    print(f"-- mid_timeframe = {cur_date_mid_timeframe}")
+                    print('-- identified trading setup')
+                    df_entry_log_long['decision_final'].loc[cur_date_low_timeframe] = \
+                        decision_pattern * decision_entry * decision_direction
                     fig_hubs.show()
-                    fig_entry.show()
-                    print('- entry module satisfied')
-                else:
-                    print('- entry module not satisfied')
-
-
             else:
-                debug_logging('- pattern module not satisfied')
+                print('-- pattern module not satisfied')
 
+            ### ------------ Entry module processing------------ ###
 
-
+        # save the entry log
+        df_entry_log_long.to_csv(os.path.join(self.backtesting_dir, 'entry_log_long.csv'))
 
 if __name__ == '__main__':
 
@@ -195,7 +208,7 @@ if __name__ == '__main__':
                               function_high_timeframe='SMA_5_10_20_trend',
                               function_mid_timeframe='chanlun_central_hub',
                               function_low_timeframe='RSI_extreme_cross',
-                              bt_start_date='2021-01-01 00:00:00+00:00',
+                              bt_start_date='2023-01-01 00:00:00+00:00',
                               bt_end_date='2023-11-01 00:00:00+00:00')
 
     # Run the backtesting

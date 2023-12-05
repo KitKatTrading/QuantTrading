@@ -123,13 +123,18 @@ def main(df_OHLC_low,
 
         # TODO - debug the sell case
         # Generate sell signals (-1) where there's an overbought condition and a death cross
-        df_OHLC_low['decision'] = np.where((df_OHLC_low['RSI_overbought'] == -1) & df_OHLC_low['death_cross'], -1, 0)
+        df_OHLC_low['decision_overbought_short'] = np.where((df_OHLC_low['RSI_overbought'] == -1) & df_OHLC_low['death_cross'], -1, 0)
 
         # Generate buy signals (1) where there's an oversold condition and a death cross
-        df_OHLC_low['decision'] = np.where((df_OHLC_low['RSI_oversold'] == 1) & df_OHLC_low['golden_cross'], 1, 0)
+        df_OHLC_low['decision_oversold_long'] = np.where((df_OHLC_low['RSI_oversold'] == 1) & df_OHLC_low['golden_cross'], 1, 0)
+
+        # Combine the signals into a single column
+        df_OHLC_low['decision'] = df_OHLC_low['decision_overbought_short'] + df_OHLC_low['decision_oversold_long']
 
         ### clean up dataframe
-        df_OHLC_low.drop(columns=['RSI_overbought', 'RSI_oversold', 'death_cross', 'golden_cross'], inplace=True)
+        df_OHLC_low.drop(columns=['RSI_overbought', 'RSI_oversold',
+                                  'decision_oversold_long', 'decision_overbought_short',
+                                  'death_cross', 'golden_cross'], inplace=True)
         df_OHLC_low.dropna(inplace=True)
 
         # debug
