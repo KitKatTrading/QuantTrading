@@ -114,12 +114,12 @@ def main(df_OHLC_low,
 
         ### second check for death cross and golden cross
         # Create a column for death cross (current RSI < 21 EMA and previous RSI > 21 EMA)
-        df_OHLC_low['death_cross'] = (df_OHLC_low['RSI'] < df_OHLC_low['RSI_EMA21']) & \
-                                     (df_OHLC_low['RSI'].shift(1) > df_OHLC_low['RSI_EMA21'].shift(1))
+        df_OHLC_low['death_cross'] = (df_OHLC_low['RSI_EMA6'] < df_OHLC_low['RSI_EMA12']) & \
+                                     (df_OHLC_low['RSI_EMA6'].shift(1) > df_OHLC_low['RSI_EMA12'].shift(1))
 
         # Create a column for golden cross (current RSI > 21 EMA and previous RSI < 21 EMA)
-        df_OHLC_low['golden_cross'] = (df_OHLC_low['RSI'] > df_OHLC_low['RSI_EMA21']) & \
-                                     (df_OHLC_low['RSI'].shift(1) < df_OHLC_low['RSI_EMA21'].shift(1))
+        df_OHLC_low['golden_cross'] = (df_OHLC_low['RSI_EMA6'] > df_OHLC_low['RSI_EMA12']) & \
+                                     (df_OHLC_low['RSI_EMA6'].shift(1) < df_OHLC_low['RSI_EMA12'].shift(1))
 
         # TODO - debug the sell case
         # Generate sell signals (-1) where there's an overbought condition and a death cross

@@ -89,8 +89,8 @@ class Backtesting:
 
         # Vectorize the high timeframe directional module decisions
         df_decision_direction = self.strategy.strategy_high_timeframe.main(df_OHLC_high, run_mode='backtest')
-        df_decision_direction_long = df_decision_direction.loc[df_decision_direction['value'] == 1]
-        df_decision_direction_short = df_decision_direction.loc[df_decision_direction['value'] == -1]
+        df_decision_direction_long = df_decision_direction.loc[df_decision_direction['decision'] == 1]
+        df_decision_direction_short = df_decision_direction.loc[df_decision_direction['decision'] == -1]
 
         ### ------------ Process mid timeframe data ------------ ###
         # Load data
@@ -107,7 +107,11 @@ class Backtesting:
         # Customize indicators
         # Indicator #1: RSI and its EMA21
         df_OHLC_low['RSI'] = talib.RSI(df_OHLC_low['Close'], timeperiod=14)
-        df_OHLC_low['RSI_EMA21'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=21)
+        df_OHLC_low['RSI_EMA6'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=6)
+        df_OHLC_low['RSI_EMA12'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=12)
+        df_OHLC_low['RSI_EMA24'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=24)
+
+
         df_OHLC_low.dropna(inplace=True)
 
         # Vectorize the low timeframe entry module decisions
@@ -129,7 +133,8 @@ class Backtesting:
         """ Since we have vectorized the entry module, we can just loop through the identified entries"""
 
         ### ------------ Long entries ------------ ###
-        for idx_low, datetime_low in enumerate(df_decision_entry_long.index):
+        # for idx_low, datetime_low in enumerate(df_decision_entry_long.index):
+        for idx_low, datetime_low in enumerate(df_OHLC_low.index):
 
             # update the cooling down counter
             if cooling_down_counter > 0:
@@ -137,33 +142,23 @@ class Backtesting:
 
             # get the current date
             cur_date_low_timeframe = datetime_low
-            decision_entry = df_decision_entry_long['decision'].loc[cur_date_low_timeframe]
+            decision_entry = df_decision_entry['decision'].loc[cur_date_low_timeframe]
             df_entry_log_long['decision_entry'].loc[cur_date_low_timeframe] = decision_entry
             print(f"low_timeframe = {cur_date_low_timeframe}")
 
-            ### ------------ Direction module processing------------ ###
-
-            # convert the low timeframe date to the open time of the corresponding high timeframe candle
+            # debug get all decisions
             cur_date_high_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_high)
             cur_date_high_timeframe = cur_date_high_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
-            # get the decision from the direction module
             try:
-                decision_direction = df_decision_direction['value'].loc[cur_date_high_timeframe]
+                decision_direction = df_decision_direction['decision'].loc[cur_date_high_timeframe]
                 df_entry_log_long['decision_direction'].loc[cur_date_low_timeframe] = decision_direction
             except:
                 print(f"- high_timeframe = {cur_date_high_timeframe}")
                 print('- error - direction module not satisfied')
                 continue
 
-            # skip if decision_direction is not the same as the decision_entry
-            if decision_direction != decision_entry:
-                continue
-            else:
-                print(f"- high_timeframe = {cur_date_high_timeframe}")
-
-            ### ------------ Pattern module processing------------ ###
-            # get the datetime for the mid timeframe and get rid of the open candle (for real time processing)
+            # pattern direction
             cur_date_mid_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_mid)
             if self.timeframe_mid == "12h":
                 hours_offset_mid = 12
@@ -174,26 +169,68 @@ class Backtesting:
 
             # check the pattern module
             df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe].copy()
+            df_OHLC_mid_temp = df_OHLC_mid.copy()
             try:
                 decision_pattern, fig_hubs = (
-                    self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp, num_candles=500))
+                    self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp))
                 df_entry_log_long['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
             except:
                 print('- error - pattern module not satisfied')
                 continue
 
-            if decision_pattern == decision_entry:
-                if cooling_down_counter > 0:
-                    continue
-                elif cooling_down_counter == 0:
-                    cooling_down_counter = cooling_down_period
-                    print(f"-- mid_timeframe = {cur_date_mid_timeframe}")
-                    print('-- identified trading setup')
-                    df_entry_log_long['decision_final'].loc[cur_date_low_timeframe] = \
-                        decision_pattern * decision_entry * decision_direction
-                    fig_hubs.show()
-            else:
-                print('-- pattern module not satisfied')
+            # ### ------------ Direction module processing------------ ###
+            #
+            # # convert the low timeframe date to the open time of the corresponding high timeframe candle
+            # cur_date_high_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_high)
+            # cur_date_high_timeframe = cur_date_high_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
+            #
+            # # get the decision from the direction module
+            # try:
+            #     decision_direction = df_decision_direction['decision'].loc[cur_date_high_timeframe]
+            #     df_entry_log_long['decision_direction'].loc[cur_date_low_timeframe] = decision_direction
+            # except:
+            #     print(f"- high_timeframe = {cur_date_high_timeframe}")
+            #     print('- error - direction module not satisfied')
+            #     continue
+            #
+            # # skip if decision_direction is not the same as the decision_entry
+            # if decision_direction != decision_entry:
+            #     continue
+            # else:
+            #     print(f"- high_timeframe = {cur_date_high_timeframe}")
+            #
+            # ### ------------ Pattern module processing------------ ###
+            # # get the datetime for the mid timeframe and get rid of the open candle (for real time processing)
+            # cur_date_mid_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_mid)
+            # if self.timeframe_mid == "12h":
+            #     hours_offset_mid = 12
+            # elif self.timeframe_mid == '4h':
+            #     hours_offset_mid = 4
+            # cur_date_mid_timeframe = cur_date_mid_timeframe - timedelta(hours=hours_offset_mid)
+            # cur_date_mid_timeframe = cur_date_mid_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
+            #
+            # # check the pattern module
+            # df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe].copy()
+            # try:
+            #     decision_pattern, fig_hubs = (
+            #         self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp, num_candles=500))
+            #     df_entry_log_long['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
+            # except:
+            #     print('- error - pattern module not satisfied')
+            #     continue
+            #
+            # if decision_pattern == decision_entry:
+            #     if cooling_down_counter > 0:
+            #         continue
+            #     elif cooling_down_counter == 0:
+            #         cooling_down_counter = cooling_down_period
+            #         print(f"-- mid_timeframe = {cur_date_mid_timeframe}")
+            #         print('-- identified trading setup')
+            #         df_entry_log_long['decision_final'].loc[cur_date_low_timeframe] = \
+            #             decision_pattern * decision_entry * decision_direction
+            #         fig_hubs.show()
+            # else:
+            #     print('-- pattern module not satisfied')
 
             ### ------------ Entry module processing------------ ###
 
@@ -203,10 +240,10 @@ class Backtesting:
 if __name__ == '__main__':
 
     # Define the backtesting object
-    backtesting = Backtesting(name_symbol='BTCUSDT', data_source='binance', name_strategy='chanlun_12h',
+    backtesting = Backtesting(name_symbol='BTCUSDT', data_source='binance', name_strategy='chanlun',
                               timeframe_high='1w', timeframe_mid='12h', timeframe_low='1h',
-                              function_high_timeframe='SMA_5_10_20_trend',
-                              function_mid_timeframe='chanlun_central_hub',
+                              function_high_timeframe='always_long',
+                              function_mid_timeframe='chanlun',
                               function_low_timeframe='RSI_extreme_cross',
                               bt_start_date='2023-01-01 00:00:00+00:00',
                               bt_end_date='2023-11-01 00:00:00+00:00')
