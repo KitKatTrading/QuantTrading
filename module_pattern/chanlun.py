@@ -1,910 +1,516 @@
-import sys
-import pandas as pd
 import numpy as np
-from datetime import date
-import plotly.graph_objects as go
-import os
+import pandas as pd
+import plotly.graph_objs as go
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', 200)
 
-# data_dir='/scratch/tmp/pudge/chan/data/'
+from utils import debug_logging
 
-
-#end debug
-#init from non-inclusion
-def buy_sell(INDEX,data_dir,debug=1):
-    os.chdir(data_dir)
-    len_dir = os.listdir(data_dir)
- 
-    if date.fromtimestamp(os.path.getmtime(len_dir[INDEX]))<date.today():#if the file is
-         #not updated on today
-         return None
-# =============================================================================
-    if debug == 0:
-        debug = 1
-    df = pd.read_csv(len_dir[INDEX])[['low','high','datetime']][:-debug]
-    if debug >= len(df):
-        print('skipped')
-        return ;
-    print('processing ' + len_dir[INDEX].split('_')[1].split('.')[0])
-    i = 0
-    while(True ):
-        if ( df['low'][i] <=  df['low'][i+1] ) or (df['high'][i] <=  df['high'][i+1]):
-            i = i + 1
-        else :
-            break
-    df = df[i:].reset_index(drop=True)
-    
-    #REMOVE INCLUSION
-    while ( True ):
-        temp_len = len(df)
-        i=0
-        while i<=len(df)-4:
-            if (df.iloc[i+2,0]>=df.iloc[i+1,0] and df.iloc[i+2,1]<=df.iloc[i+1,1]) or\
-            (df.iloc[i+2,0]<=df.iloc[i+1,0] and df.iloc[i+2,1]>=df.iloc[i+1,1]):
-                if df.iloc[i+1,0]>df.iloc[i,0]:
-                    df.iloc[i+2,0] = max(df.iloc[i+1:i+3,0])
-                    df.iloc[i+2,1] = max(df.iloc[i+1:i+3,1])
-                    df.drop(df.index[i+1],inplace=True)
-                    
-                    continue
-                else:
-                    df.iloc[i+2,0] = min(df.iloc[i+1:i+3,0])
-                    df.iloc[i+2,1] = min(df.iloc[i+1:i+3,1])
-                    df.drop(df.index[i+1],inplace=True)
-                    
-                    continue
-            i = i + 1
-       # print(len(df))    
-        if len(df)==temp_len:
-            break
-            
-    df= df.reset_index(drop=True)  
-    #get difenxing and dingfenxing
-    ul=[0]
-    for i in range(len(df)-2):
-        if df.iloc[i+2,0] < df.iloc[i+1,0] and df.iloc[i,0] < df.iloc[i+1,0]:
-            ul = ul + [1]
-            continue
-        if df.iloc[i+2,0] > df.iloc[i+1,0] and df.iloc[i,0] > df.iloc[i+1,0]:
-            ul = ul + [-1]# difenxing -1 dingfenxing +1
-            continue
-        else:
-            ul = ul + [0]
-    ul = ul + [0]
-    global df1
-    df1 = pd.concat((df[['low','high']],pd.DataFrame(ul),df['datetime']),axis=1)
-      
-    i = 0
-    
-    while df1.iloc[i,2] == 0 and i < len(df1)-2:
-        i = i + 1
-    df1=df1[i:]  
-    
-    i = 0
-    while ( sum(abs(df1.iloc[i+1:i+4,2]))>0 or df1.iloc[i,2]==0) and i < len(df1)-2:
-        i = i + 1
-    df1=df1[i:]
-    df1.rename(columns= {0:'od'},inplace=True)
-    #df1.columns=Index(['low', 'high', 'od', 'datetime'], dtype='object')
-    #df1.columns=Index(['low', 'high', 'od', 'datetime'], dtype='object')
-    #df1.columns=Index(['low', 'high', 'od', 'datetime'], dtype='object')
-    #df1.columns=Index(['low', 'high', 'od', 'datetime'], dtype='object')
-    if len(df1)<=60:
-        print('error!')
-        return ;
-    #remove those within 3 bars
-    df1=df1.reset_index(drop=True)
-    global od_list#od_list are the index of df1 whose corresponding point are fenxing extreme vertex
-    
-    od_list=[0]
-    judge(0,0,1) 
-    
-    
-    #judge(27,34,-1)
-    
-    
-    
-    
-    
-    #generate seg
-    start = 0
-    while start < len(od_list)-5:
-        if check_init_seg(od_list[start:start+4]):
-            break
-        else:
-            start = start + 1
-    
-    lines = []
-    
-    i = start
-    end = False
-    while i <= len(od_list)-4:
-        se = Seg(od_list[i:i+4])
-        label = False
-        while label == False and i <= len(od_list)-6:
-            i = i + 2
-            label,start = se.grow(od_list[i+2:i+4])
-            if se.vertex[-1] > od_list[-3]:
-                end =True
-                
-                lines += [se.lines()]
-                break
-        if end:
-            break
-        i =  np.where(np.array(od_list) == se.vertex[-1])[0][0]
-        #show datetime of the end of the segment
-        #print(df1.iloc[se.vertex[-1],3])   
-        lines += [se.lines()]#there are still remaining fewer than or equal to 
-        #3 bies not considered in the last
-        #seg ,which is unfinished and named by tails
-    low_list=df1.iloc[se.vertex[-1]:,0]
-    high_list=df1.iloc[se.vertex[-1]:,1]
-    
-    low_extre=low_list.min()
-    high_extre=high_list.max()
-    if se.finished == True:
-        if lines[-1][0][1] < lines[-1][1][1] :#d==1
-            lines += [ [(se.vertex[-1],lines[-1][1][1]),(low_list.idxmin(),low_extre)]]
-        else:
-            lines += [ [(se.vertex[-1],lines[-1][1][1]),(high_list.idxmax(),high_extre)]]
-            
-    else:
-        if lines[-1][0][1] < lines[-1][1][1] :#d==1
-            if low_extre > lines[-1][0][1]:
-                lines[-1] = [ (lines[-1][0][0],lines[-1][0][1]),(high_list.idxmax(),high_extre)] 
-            else:
-                if low_list.idxmin()-se.vertex[-1]>=10:
-                    lines += [ [(se.vertex[-1],lines[-1][1][1]),(low_list.idxmin(),low_extre)]]
-        else:
-            
-            if high_extre < lines[-1][0][1]:
-                lines[-1] = [ (lines[-1][0][0],lines[-1][0][1]),(low_list.idxmin(),low_extre) ]
-            else:
-                if  high_list.idxmax()-se.vertex[-1]>=10:
-                    lines += [ [(se.vertex[-1],lines[-1][1][1]),(high_list.idxmax(),high_extre)]]   
-    
-    #print(lines)
-    #tails is the unfinished seg,tails[4] is its direction
-    a,tails = get_pivot(lines)    
-    pro_a= process_pivot(a)
-# =============================================================================
-#     if len(pro_a)>=4:
-#         if pro_a[-1].trend==-1 and pro_a[-2].trend==0 and pro_a[-3].trend==-1 and\
-#         tails[4]==-1 and pro_a[-1].finished ==0 and df1.iloc[-1][0] <pro_a[-1].dd :
-#             for yi in range(0,len(a)):
-#                 pro_a[yi].dis1()
-# =============================================================================
-    
-    
-    signal,interval = buy_point1(pro_a,tails)    
-    if signal:#trend slow down, first pivot dd > next pivot gg
-        pro_a[-1].write_out('../buy1/'+len_dir[INDEX].split('_')[1].split('.')[0]+'_buy1.txt',tails)
-        
-    signal,interval = buy_point3_des(pro_a,tails)    
-    if signal:#trend slow down, first pivot dd > next pivot gg
-        pro_a[-1].write_out('../buy3/'+len_dir[INDEX].split('_')[1].split('.')[0]+'_buy3.txt',tails)
-    signal,interval = buy_point23(pro_a,tails)    
-    if signal:#trend slow down, first pivot dd > next pivot gg
-         pro_a[-1].write_out('../buy23/'+len_dir[INDEX].split('_')[1].split('.')[0]+'_buy23.txt',tails)
-    signal,interval = buy_point2(pro_a,tails)    
-    if signal:#trend slow down, first pivot dd > next pivot gg
-         pro_a[-1].write_out('../buy2/'+len_dir[INDEX].split('_')[1].split('.')[0]+'_buy2.txt',tails)
-    signal,interval = sell_point1(pro_a,tails)    
-    if signal:#trend slow down, first pivot dd > next pivot gg
-        pro_a[-1].write_out('../sell1/'+len_dir[INDEX].split('_')[1].split('.')[0]+'_sell1.txt',tails)
-        
-    signal,interval = sell_point3_ris(pro_a,tails)    
-    if signal:#trend slow down, first pivot dd > next pivot gg
-        pro_a[-1].write_out('../sell3/'+len_dir[INDEX].split('_')[1].split('.')[0]+'_sell3.txt',tails)
-    signal,interval = sell_point2(pro_a,tails)    
-    if signal:#trend slow down, first pivot dd > next pivot gg
-         pro_a[-1].write_out('../sell2/'+len_dir[INDEX].split('_')[1].split('.')[0]+'_sell2.txt',tails)
-     
-
-#end buy_sell
+DEBUG_PLOT = False
 
 
-#utility
-def same_d(a1,a2,b1,b2,a_sign):
-    #a1 low a2 high b1 low b2 high
-    if a_sign == 1:
-        return (a1 > b1 and a2 > b2)
-    else:
-        return (a1 < b1 and a2 < b2)
-def new_extreme(a1,a2,b1,b2,a_sign):
-    #whether b has new extreme than a,true return true
-    if a_sign == 1:
-        return b2 >= a2
-    else:
-        return a1 >= b1
-    
-def write_seg(temp_lines,file,buy_sign,interval):
-    if buy_sign==True:
-        f = open(file,'w')
-        f.write('seg-3:'+str(df1.iloc[temp_lines[-3][0][0],3])+' '+\
-                str(df1.iloc[temp_lines[-3][0][0],1])+str(df1.iloc[temp_lines[-3][1][0],3])+' '+\
-                str(df1.iloc[temp_lines[-3][1][0],0])  )
-        f.write('\n')
-        f.write('seg-2:'+str(df1.iloc[temp_lines[-2][0][0],3])+' '+
-                str(df1.iloc[temp_lines[-2][0][0],0])+str(df1.iloc[temp_lines[-2][1][0],3])+' '+
-                str(df1.iloc[temp_lines[-2][1][0],1]) )
-        f.write('\n')
-        f.write('seg-1:'+str(df1.iloc[temp_lines[-1][0][0],3])+' '+
-                str(df1.iloc[temp_lines[-1][0][0],1])+str(df1.iloc[temp_lines[-1][1][0],3])+' '+
-                str(df1.iloc[temp_lines[-1][1][0],0]) )
-        f.write('cur_price:\n'+str(df1.iloc[-1,0]))
-        f.write('\n')
-        f.write('cur_time:\n'+str(df1.iloc[-1,3]))
-        f.write('\n')
-        if df1.iloc[temp_lines[-1][1][0],0]<interval:
-            f.write('target_price:'+str(interval))
-        else:
-            f.write('supp_price:'+str(interval))
-        
-        f.close()
-    else:
-        f = open(file,'w')
-        f.write('seg-3:'+str(df1.iloc[temp_lines[-3][0][0],3])+' '+\
-                str(df1.iloc[temp_lines[-3][0][0],0])+str(df1.iloc[temp_lines[-3][1][0],3])+' '+\
-                str(df1.iloc[temp_lines[-3][1][0],1])  )
-        f.write('\n')
-        f.write('seg-2:'+str(df1.iloc[temp_lines[-2][0][0],3])+' '+
-                str(df1.iloc[temp_lines[-2][0][0],1])+str(df1.iloc[temp_lines[-2][1][0],3])+' '+
-                str(df1.iloc[temp_lines[-2][1][0],0]) )
-        f.write('\n')
-        f.write('seg-1:'+str(df1.iloc[temp_lines[-1][0][0],3])+' '+
-                str(df1.iloc[temp_lines[-1][0][0],0])+str(df1.iloc[temp_lines[-1][1][0],3])+' '+
-                str(df1.iloc[temp_lines[-1][1][0],1]) )
-        f.write('cur_price:\n'+str(df1.iloc[-1,1]))
-        f.write('\n')
-        f.write('cur_time:\n'+str(df1.iloc[-1,3]))
-        f.write('\n')
-        if df1.iloc[temp_lines[-1][1][0],0]>interval:
-            f.write('target_price:'+str(interval))
-        else:
-            f.write('resist_price:'+str(interval))
-        
-        f.close()
-def exist_opposite(cur_i,d,pos):
-    #print("exist_opposite")
-    #print('e0'+str(cur_i+pos))
-        #print('e1'+str(df1.iloc[cur_i+pos,0]))
-    return df1['od'].iloc[cur_i+pos]==-d and same_d(df1.iloc[cur_i,0],df1.iloc[cur_i,1],\
-     df1.iloc[cur_i+pos,0],df1.iloc[cur_i+pos,1],d)
-
-def exist_new_extreme(cur_i,d,start,end):
-    j = start
-    while j <= end:
-        if new_extreme(df1.iloc[cur_i,0],df1.iloc[cur_i,1],df1.iloc[cur_i + j,0],df1.iloc[cur_i + j,1],d):
-            return cur_i + j,True
-        j = j + 1
-    return cur_i,False
+### Import Enums
+from enum import Enum
 
 
+class Operate(Enum):
+    HL = "持多"   # Hold Long
+    HS = "持空"   # Hold Short
+    HO = "持币"   # Hold Other
 
-def judge(prev_i,cur_i,d):#d the direction of fenxing to be confirmed, prev_i the previous confirmed
-    #d == df1['od][cur_i] should hold when finished and prev_i = cur_i is set
-    global od_list 
-    
-    
-    
-    #print('start ' + str(cur_i))
-    if cur_i + 4 >= len(df1)-1:
-        #print('finished')
-        
-        #stop()
-        return 0
-        
-    if cur_i - prev_i < 4 or df1['od'].iloc[cur_i] != d:
-        cur_i = cur_i + 1
-        #print(cur_i)
-        judge(prev_i,cur_i,d)
-    else:# at least 4 bars later and direction correct
-        # now df1['od'].iloc[cur_i] ==d and cur_i - prev_i >= 4 
-        
-        new_i,label1 = exist_new_extreme(cur_i,d,2,3)
-        if label1 == True:
-            cur_i = new_i
-            #print("f1")
-            judge(prev_i,cur_i,d)
-        else:
-            k = 4
-            if cur_i  + k + 1>= len(df1)-1:
-                #print ("finishe2!")
-                return 0
-            
-            while not exist_opposite(cur_i,d,k):
-            #while True:    
-                #kth >=4 later bar does not match opposite fenxing
-                new_i,label2 = exist_new_extreme(cur_i,d,k,k)
-                if label2 == True:
-                    cur_i = new_i
-                    judge(prev_i,cur_i,d)
-                    return 0
-                    #print('f2')
-                else:
-                    k = k + 1
-                    if cur_i  + k >= len(df1)-1:
-                        #print ("finishe4!")
-                        return 0
-                
-            #confirmed by existent opposite fenxing
-            prev_i = cur_i
-            cur_i = cur_i + k
-            od_list = od_list + [prev_i]
-            #print('added' + str(prev_i))
-            #print('input ' + str(cur_i))
-            #print('-d ' + str(d))
-            judge(prev_i,cur_i,-d)
-    #print('post call judge' + str(cur_i))
-#end judge
+    LO = "开多"   # Long Open
+    LE = "平多"   # Long Exit
+
+    SO = "开空"   # Short Open
+    SE = "平空"   # Short Exit
 
 
+class Mark(Enum):
+    D = "底分型"
+    G = "顶分型"
 
-#utils for seg
-    
+class Direction(Enum):
+    Up = "向上"
+    Down = "向下"
 
-def check_init_seg(start_l):
-    #return True successful False fail
-    d = -df1.iloc[start_l[0],2]
-    if not ((d == 1 or d == -1 )and(len(start_l)==4)):
-        print('initializing seg failed in  check_init_seg!')
-            
-    if d == 1:
-        if df1.iloc[start_l[1],1] < df1.iloc[start_l[3],1] and \
-        df1.iloc[start_l[0],0] < df1.iloc[start_l[2],0]:#valid
-            return True
-        else:
-            return False
-    else:
-        if df1.iloc[start_l[1],0] > df1.iloc[start_l[3],0] and \
-        df1.iloc[start_l[0],1] > df1.iloc[start_l[2],1]:#valid
-            return True
-        else:
-            return False
-
-class Seg:
-
-    # Initializer / Instance Attributes
-    #directino of a seg is the same as its first bi,
-    #direction of a bi is the negative of its starting fenxing:
-    #rising bi is +1 and falling bi is -1
-    def __init__(self, start_l):
-        
-        self.start = start_l[0]
-        
-        if df1.iloc[start_l[0],2]==0:
-            print("error init!")
-        self.d = - df1.iloc[start_l[0],2]
-        
-        self.finished = False
-        self.vertex = start_l
-        self.gap = False
-        if self.d == 1:
-            self.cur_extreme =  df1.iloc[start_l[3],1]
-            self.cur_extreme_pos =  start_l[3]
-            self.prev_extreme =  df1.iloc[start_l[1],1]
-        else:
-            self.cur_extreme =  df1.iloc[start_l[3],0]
-            self.cur_extreme_pos =  start_l[3]
-            self.prev_extreme =  df1.iloc[start_l[1],0]
-    
-    def grow(self,new_l):
-        #len(new_l) == 2
-        #two consecutive bis will be added
-        #new_d, direction of the first bi added
-        if 1 == self.d:#rising seg
-            if df1.iloc[new_l[1],1] >= self.cur_extreme:#new extreme
-                if df1.iloc[new_l[0],0] > self.prev_extreme:
-                    self.gap = True
-                else:
-                    self.gap = False
-                self.prev_extreme = self.cur_extreme
-                self.cur_extreme = df1.iloc[new_l[1],1]
-                self.cur_extreme_pos =  new_l[1]
-                
-            else:# no new extreme two cases to finish
-                if (self.gap == False and df1.iloc[new_l[1],0] < df1.iloc[self.vertex[-1],0]) or \
-                (self.gap == True and (df1.iloc[self.vertex[-1],1] < df1.iloc[self.vertex[-3],1] ) \
-                 and (df1.iloc[self.vertex[-2],0] < df1.iloc[self.vertex[-4],0] )):
-                    self.finished = True
-                    
-                    self.vertex = [ i for i in self.vertex if i <= self.cur_extreme_pos]
-                    #print("finished")
-                    #print(self.vertex)
-                    #print(self.getrange())
-                    return True,self.vertex[-1]
-                
-                    
-            #seg continued
-            self.vertex = self.vertex + new_l
-            
-            return False,0
-            
-        else:
-            if df1.iloc[new_l[1],0] <= self.cur_extreme:#new extreme
-                if df1.iloc[new_l[0],1] < self.prev_extreme:
-                    self.gap = True
-                else:
-                    self.gap = False
-                self.vertex = self.vertex + new_l
-                self.prev_extreme = self.cur_extreme
-                self.cur_extreme = df1.iloc[new_l[1],0]
-                self.cur_extreme_pos =  new_l[1]
-            else:# no new extreme two cases to finish
-                if (self.gap == False and df1.iloc[new_l[1],1] > df1.iloc[self.vertex[-1],1]) or \
-                (self.gap == True and (df1.iloc[self.vertex[-1],0] > df1.iloc[self.vertex[-3],0] ) \
-                 and (df1.iloc[self.vertex[-2],1] > df1.iloc[self.vertex[-4],1] )):
-                    self.finished = True
-                    
-                    self.vertex = [ i for i in self.vertex if i <= self.cur_extreme_pos]
-                    #print("finished")
-                    #print(self.vertex)
-                    #print(self.getrange())
-                    return True,self.vertex[-1]
-            
-            #seg continued    
-            self.vertex = self.vertex + new_l
-            
-            return False,0
-    def check_finish(self):
-        #two consecutive bis will be added
-        #new_d, direction of the first bi added
-        if len(self.vertex)-1 <= 5:
-            print("no need to check!")
-            return False
-        
-    def getrange(self):
-        if self.d == 1:
-            return [ df1.iloc[self.start,0],self.cur_extreme,self.d ]
-        else:
-            return [ df1.iloc[self.start,1],self.cur_extreme,self.d ]                
-    def show(self):
-        print(self.vertex)
-        print( self.getrange() )
-        print(df1.iloc[self.vertex[-1],3])
-    def lines(self):#lines :d==1 ==> [(index in df1 of starting
-        #,low of line),(index of end ,high of line)],
-        #d==-1 ==>[(,high of line),(,low of line)]
-        return [(self.start,self.getrange()[0]),\
-                (self.vertex[-1],self.getrange()[1])]
-    
-#end class Seg
-#each object of pivot is a pivot
-#1min pivot
-class Pivot1:
-    def __init__(self, lines,d):#lines a 3 element list of Seg.getlines()
-        
-        self.trend = -2
-        self.level = 1
-        self.enter_d = d#
-        self.aft_l_price = 0
-        self.aft_l_time = '00'# time for third type buy or sell point
-        self.future_zd = -float('inf')
-        self.future_zg = float('inf')
-        if d == 1:#pivot=[zg,zd,dd,gg,start_time,end_time,d] d the direction of
-                #the seg pre-entering but not in pivot
-            if lines[3][1][1] <= lines[1][0][1]: #low of line i+3 < low of line i+1   
-                self.zg = min(lines[1][0][1],lines[3][0][1])
-                self.zd = max(lines[3][1][1],lines[1][1][1])
-                self.dd = lines[2][0][1]
-                self.gg = max(lines[1][0][1],lines[2][1][1])
-                      
-        else:#pivot=[zg,zd,dd,gg,start_time,end_time,start_seg_index,end_seg_index,d] d the seg pre-entering pivot
-            if lines[3][1][1] >= lines[1][0][1]:    
-                self.zg = min(lines[1][1][1],lines[3][1][1])
-                self.zd = max(lines[3][0][1],lines[1][0][1])
-                self.dd = min(lines[2][1][1],lines[1][0][1])
-                self.gg = lines[2][0][1]
-        
-        self.start_index = lines[1][0][0]
-        self.end_index = lines[2][1][0]# should be updated after growing 
-        #lines[self.end_index] is the leaving seg
-        self.finished = 0
-        self.enter_force = seg_force(lines[0])
-        self.leave_force = seg_force(lines[3])# should be updated after growing
-        self.size  = 3#should be updated
-        self.mean = 0.5*(self.zd + self.zg)
-        self.start_time = df1.iloc[self.start_index,3 ]
-        self.leave_start_time = df1.iloc[self.end_index,3 ]# should be updated after growing
-        self.leave_end_time = df1.iloc[lines[3][1][0],3 ] # should be updated after growing
-        self.leave_d = -d # should be updated after growing
-        self.leave_end_price = lines[3][1][1] # should be updated after growing
-        self.leave_start_price = lines[3][0][1]
-        self.prev2_force = seg_force(lines[1])
-        self.prev1_force = seg_force(lines[2])
-        self.prev2_end_price = lines[1][1][1]
-        #tail_price the leave seg's end price,if the seg
-        #is still not finished,its leave seg is the last seg within the pivot
-        
-    def grow(self,seg):#seg a Seg.getlines()
-        
-        self.prev2_force = self.prev1_force 
-        self.prev1_force = self.leave_force
-        self.prev2_end_price = self.leave_start_price
-        if seg[1][1] > seg[0][1]:#d for the line is 1
-            if (seg[1][1]>=self.zd and seg[0][1] <= self.zg) and (self.size <=28):#then the seg is
-                # added to the pivot
-                self.end_index = seg[0][0]
-                
-                self.size = self.size + 1
-                self.dd = min(self.dd,seg[0][1])
-                
-                self.leave_force = seg_force(seg)
-                self.leave_start_time = df1.iloc[self.end_index,3 ]
-                self.leave_end_time = df1.iloc[seg[1][0],3 ]
-                self.leave_d = 2*int(seg[1][1]>seg[0][1])-1
-                self.leave_start_price = seg[0][1]
-                self.leave_end_price = seg[1][1]
-                
-                if self.size in [4,7,10,19,28]:#level expansion
-                    self.future_zd = max(self.future_zd ,self.dd)
-                    self.future_zg = min(self.future_zg ,self.gg)
-                
-                if self.size in [10,28]:#level expansion
-                    self.level = self.level + 1
-                    self.zd = self.future_zd
-                    self.zg = self.future_zg
-                    self.future_zd = -float('inf')
-                    self.future_zg = float('inf')
-                
-            else:
-                
-                if (seg[1][1]>=self.zd and seg[0][1] <= self.zg):
-                    self.dd = min(self.dd,seg[0][1])
-                    self.finished = 0.5        
-                else:
-                    self.finished = 1
-                
-                
-                self.aft_l_price = seg[1][1]
-                self.aft_l_time = df1.iloc[seg[1][0],3]
-                #only when the seg is finished is the tail_price different from end_price
-        else:#d for the line is -1. falling line
-            if (seg[1][1]<=self.zg and seg[0][1] >= self.zd) and self.size<=28:#then the seg is
-                # added to the pivot
-                self.end_index = seg[0][0]
-                self.end_price = seg[0][1]
-                self.size = self.size + 1
-                self.gg = max(self.gg,seg[0][1])
-                
-                self.leave_force = seg_force(seg)
-                self.leave_start_time = df1.iloc[self.end_index,3 ]
-                self.leave_end_time = df1.iloc[seg[1][0],3 ]
-                self.leave_d = 2*int(seg[1][1]>seg[0][1])-1
-                self.leave_start_price = seg[0][1]
-                self.leave_end_price = seg[1][1]
-                
-                if self.size in [4,7,10,19,28]:#level expansion
-                    self.future_zd = max(self.future_zd ,self.dd)
-                    self.future_zg = min(self.future_zg ,self.gg)
-                
-                if self.size in [10,28]:#level expansion
-                    self.level = self.level + 1
-                    self.zd = self.future_zd
-                    self.zg = self.future_zg
-                    self.future_zd = -float('inf')
-                    self.future_zg = float('inf')
-            else:
-                
-                
-                if (seg[1][1]<=self.zg and seg[0][1] >= self.zd) :#broke because it is too long
-                    self.gg = max(self.gg,seg[0][1])
-                    self.finished = 0.5   
-                else:
-                    self.finished = 1
-                
-                
-                self.aft_l_price = seg[1][1]
-                self.aft_l_time = df1.iloc[seg[1][0],3]
-        
-    
-    def display(self):
-        print('enter_d:'+str(self.enter_d))
-        print('zd:'+str(self.zd))
-        print('zg:'+str(self.zg))
-        print('dd:'+str(self.dd))
-        print('gg:'+str(self.gg))
-        print('start_index:'+str(self.start_index))
-        print('end_index:'+str(self.end_index))
-        print('start_time:'+str(self.start_time))
-        
-        print('size:'+str(self.size))
-        print('enter_force:'+str(self.enter_force))
-        print('leave_force:'+str(self.leave_force))
-        print('finished:'+str(self.finished))
-        print('leave_start_time:'+str(self.leave_start_time))
-        print('leave_end_time:'+str(self.leave_end_time))
-        print('leave_d:'+str(self.leave_d))
-        print('leave_start_price:'+str(self.leave_start_price))
-        print('leave_end_price:'+str(self.leave_end_price))
-        print('mean:'+str(self.mean))
-        print('aft_l_price:'+str(self.aft_l_price))
-        
-    def dis1(self):
-        print('trend:'+str(self.trend))
-        print('level:'+str(self.level))
-        print('enter_d:'+str(self.enter_d))
-        print('zd:'+str(self.zd))
-        print('zg:'+str(self.zg))
-        print('dd:'+str(self.dd))
-        print('gg:'+str(self.gg))
-        print('leave_d:'+str(self.leave_d))
-        print('start_time:'+str(self.start_time))
-        print('leave_start_time:'+str(self.leave_start_time))
-        print('\n')
-    
-    def write_out(self,filepath,extra=''):
-        f = open(filepath,'w')
-        f.write(' zd:' + str(self.zd)+' zg:'+str(self.zg) +
-                ' dd:' + str(self.dd)+' gg:'+str(self.gg) +
-                ' leave_d:' + str(self.leave_d)+
-                ' prev2_leave_force:' +str(self.prev2_force)+ ' leave_force:' + str(self.leave_force)+
-                '\n  start_time:'+str(self.start_time)+
-                '  leave_start_time:'+str(self.leave_start_time)+
-                '  leave_end_time:'+str(self.leave_end_time)+
-                '  prev2_end_price:'+str(self.prev2_end_price)+
-                '  leave_end_price:'+str(self.leave_end_price)+
-                '\n  size: ' + str(self.size)+' finished: ' + str(self.finished) + ' trend:' + 
-                str(self.trend) + ' level:' + 
-                str(self.level))
-        f.write('\n')
-        if extra!='':
-            f.write('tails:')
-            f.write(str(extra))
-            f.write('\n')
-            f.write('now')
-            f.write(str(df1.iloc[-1]))
-        f.close()    
-        return 
-        
-                
-#ebd class Pivot
-def seg_force(seg):
-    return 1000*abs(seg[1][1]/seg[0][1]-1)/(seg[1][0]-seg[0][0])
-    
-    
-def get_pivot(lines):
-    Pivot1_array = []
-    i = 0
-    
-    while i < len(lines):
-        #print(i)
-        d =  2 * int( lines[i][0][1] < lines[i][1][1] ) - 1
-        if i < len(lines)-3:
-            if d == 1:#pivot=[zg,zd,dd,gg,start_time,end_time,d] d the direction of
-                #the seg pre-entering but not in pivot
-                if lines[i+3][1][1] <= lines[i+1][0][1]: #low of line i+3 < low of line i+1   
-                    pivot = Pivot1(lines[i:i+4],d)
-                    i_j = 1
-                    while i + i_j < len(lines)-3 and pivot.finished == 0:
-                        pivot.grow(lines[i + i_j + 3])
-                        i_j = i_j +1
-                    
-                    
-                    i = i + pivot.size 
-                    Pivot1_array = Pivot1_array + [pivot]
-                    continue
-                else:
-                    i = i + 1
-                    
-            else:#pivot=[zg,zd,dd,gg,start_time,end_time,start_seg_index,end_seg_index,d] d the seg pre-entering pivot
-                if lines[i+3][1][1] >= lines[i+1][0][1]:    
-                    pivot = Pivot1(lines[i:i+4],d)
-                    i_j = 1
-                    while i + i_j < len(lines)-3 and pivot.finished == 0:
-                        pivot.grow(lines[i + i_j + 3])
-                        i_j = i_j +1
-                    i = i + pivot.size 
-                    
-                    Pivot1_array = Pivot1_array + [pivot]
-                    continue
-                else:
-                    i = i + 1
-                    
-        else:
-            i = i + 1
-            
-        
-        #pivot [zd,zg,dd,gg] zd and zg may not be valid after expansion            
-        # the second para returned is the tails,or the last unconfirmed seg,with tails[4] its d        
-    return Pivot1_array , [df1.iloc[lines[-1][0][0],3],lines[-1][0][1],\
-                   df1.iloc[lines[-1][1][0],3],lines[-1][1][1],2*int(lines[-1][1][1]>lines[-1][0][1])-1]
+class Freq(Enum):
+    Tick = "Tick"
+    F1 = "1分钟"
+    F5 = "5分钟"
+    F15 = "15分钟"
+    F30 = "30分钟"
+    F60 = "60分钟"
+    D = "日线"
+    W = "周线"
+    M = "月线"
+    S = "季线"
+    Y = "年线"
 
 
+### import Objects
 
-           
-#same hierachy decomposition
-#def process_pivot(pivot)  :
-#    i = 0
-#    while i < len(pivot)-1:
-#        if min(pivot[i][2:4]) <= max(pivot[i+1][2:4])  and\
-#        max(pivot[i][2:4]) >= min(pivot[i+1][2:4]):
-#            pivot[i+1][2] = min(pivot[i][2],pivot[i+1][2])
-#            pivot[i+1][3] = max(pivot[i][3],pivot[i+1][3])
-#            pivot[i+1][4] =pivot[i][4]
-#            pivot[i+1][5] = pivot[i+1][5]
-#            del pivot[i]
-#        else:
-#            i = i + 1
-#    return pivot
-
-def process_pivot(pivot):
-    for i in range(0,len(pivot)-1):
-        if pivot[i ].level==1 and pivot[i+1].level==1:
-            if pivot[i].dd > pivot[i+1].gg:
-                pivot[i+1].trend=-1
-            else:
-    	         if pivot[i].gg < pivot[i+1].dd:
-    	             pivot[i+1].trend=1
-    	         else:
-    	             pivot[i+1].trend=0
-        else:
-            if pivot[i ].gg> pivot[i +1].gg and pivot[i ].dd> pivot[i +1].dd:
-                pivot[i+1].trend=-1
-            else:
-                if pivot[i ].gg < pivot[i +1].gg and pivot[i ].dd < pivot[i +1].dd:
-                    pivot[i+1].trend=1
-                else:
-                    pivot[i+1].trend=0
-    return pivot
+# coding: utf-8
+# coding: utf-8
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List
 
 
+@dataclass
+class Tick:
+    symbol: str
+    name: str = ""
+    price: float = 0
+    vol: float = 0
+
+@dataclass
+class RawBar:
+    """原始K线元素"""
+    symbol: str
+    id: int          # id 必须是升序
+    dt: datetime
+    freq: str
+    open: [float, int]
+    close: [float, int]
+    high: [float, int]
+    low: [float, int]
+    vol: [float, int]
+
+@dataclass
+class NewBar:
+    """去除包含关系后的K线元素"""
+    symbol: str
+    id: int          # id 必须是升序
+    dt: datetime
+    freq: str
+    open: [float, int]
+    close: [float, int]
+    high: [float, int]
+    low: [float, int]
+    vol: [float, int]
+    elements: List[RawBar]   # 存入具有包含关系的原始K线
+
+@dataclass
+class FX:
+    symbol: str
+    freq: str
+    id: int
+    dt: datetime
+    mark: str
+    high: [float, int]
+    low: [float, int]
+    fx: [float, int]
+    power: str
+    elements: List[NewBar]
 
 
+@dataclass
+class FakeBI:
+    """虚拟笔：主要为笔的内部分析提供便利"""
+    symbol: str
+    sdt: datetime
+    edt: datetime
+    direction: Direction
+    high: [float, int]
+    low: [float, int]
+    power: [float, int]
 
-def buy_point1(pro_pivot,tails,num_pivot=2):
-    if len(pro_pivot)<=3 or tails[4]==1 or pro_pivot[-1].size>=8 or pro_pivot[-1].finished!=0 \
-    or df1.iloc[-1][0]/pro_pivot[-1].leave_end_price -1>0 or \
-     df1.iloc[-1][0] > tails[3]:
-        return False,0
-    else:#two pivot descending
-        #no slow down
-        if ( pro_pivot[-1].prev2_end_price >pro_pivot[-1].leave_end_price ) and \
-        (pro_pivot[-1].leave_start_time==tails[0]) and\
-             df1.iloc[-1][0] < pro_pivot[-1].dd and \
-            1.2*pro_pivot[-1].leave_force <pro_pivot[-1].prev2_force and \
-            ( pro_pivot[-1].dd >pro_pivot[-1].leave_end_price ):
-            return True,pro_pivot[-1].dd#target price
-        else:
-            return False,0  
-# =============================================================================
-#         if pro_pivot[-1].finished == 1 or pro_pivot[-1].leave_d!=-1 or \
-#         pro_pivot[-1].finished == 0.5:
-#             return False,0
-#         if num_pivot == 2:
-#             if pro_pivot[-2].enter_d==-1 and pro_pivot[-1].gg < pro_pivot[-2].dd \
-#             and pro_pivot[-1].enter_d==-1 and  tails[0]==pro_pivot[-1].leave_start_time \
-#             and tails[3] <= pro_pivot[-1].dd:#tails[0] tail seg start_time
-#                 return True,pro_pivot[-1].zd
-#             else:
-#                 return False,0  
-#         if num_pivot == 3:
-#             if pro_pivot[-3].enter_d==-1 and pro_pivot[-2].gg < pro_pivot[-3].dd and \
-#             pro_pivot[-2].enter_d==-1 and pro_pivot[-1].gg < pro_pivot[-2].dd and\
-#             pro_pivot[-1].enter_d==-1 and  \
-#              pro_pivot[-1].leave_force<\
-#             pro_pivot[-1].enter_force and  tails[0]==pro_pivot[-1].leave_start_time \
-#             and tails[3] <= pro_pivot[-1].dd:
-#                 return True,pro_pivot[-1].zd
-#             else:
-#                 return False,0    
-# =============================================================================
+@dataclass
+class BI:
+    symbol: str
+    freq: str
+    id: int
+    direction: str
+    fx_a: FX = None    # 笔开始的分型
+    fx_b: FX = None    # 笔结束的分型
+    fxs: List[FX] = None    # 笔内部的分型列表
+    high: float = None
+    low: float = None
+    power: float = None
+    bars: List[NewBar] = None
 
-def buy_point2(pro_pivot,tails,num_pivot=2):
-    if len(pro_pivot)<=3 or tails[4]==1 or pro_pivot[-1].size>=8 or pro_pivot[-1].finished!=0 \
-    or df1.iloc[-1][0]/pro_pivot[-1].leave_end_price -1>0 or \
-     df1.iloc[-1][0] > tails[3]:
-        return False,0
-    else:#two pivot descending
-        #no slow down
-        if ( pro_pivot[-1].prev2_end_price <pro_pivot[-1].leave_end_price ) and \
-        (pro_pivot[-1].leave_start_time==tails[0]) and\
-             pro_pivot[-1].prev2_end_price == pro_pivot[-1].dd and \
-             pro_pivot[-1].leave_start_price >0.51*(pro_pivot[-1].zd+pro_pivot[-1].zg) :
-            return True,pro_pivot[-1].prev2_end_price#support price
-        else:
-            return False,0
+@dataclass
+class Seq:
+    """特征序列"""
+    symbol: str
+    id: int
+    start_dt: datetime
+    end_dt: datetime
+    freq: str
+    direction: str
+    high: [float, int]
+    low: [float, int]
 
+@dataclass
+class SeqFX:
+    """特征序列分型"""
+    symbol: str
+    freq: str
+    id: int
+    dt: datetime
+    mark: str
+    high: [float, int]
+    low: [float, int]
+    fx: [float, int]
+    power: str
+    direction: str
+    elements: List[Seq]
 
-          
-def buy_point3_des(pro_pivot,tails):
-    if len(pro_pivot)<=2 or(tails[4]==1) or (pro_pivot[-1].finished!=1) or \
-    pro_pivot[-1].level > 1 or df1.iloc[-1][0]/pro_pivot[-1].leave_end_price -1>0 or \
-     df1.iloc[-1][0] > tails[3]:
-        return False,0
-    else:#two pivot descending
-        if df1.iloc[-1][0] <0.98*pro_pivot[-1].leave_end_price  and df1.iloc[-1][0] >1.02*pro_pivot[-1].zg and \
-        pro_pivot[-1].aft_l_price >1.02*pro_pivot[-1].zg and \
-         tails[0] == pro_pivot[-1].leave_end_time and \
-         pro_pivot[-1].leave_force > pro_pivot[-1].prev2_force and\
-         pro_pivot[-1].leave_end_price > pro_pivot[-1].prev2_end_price:
-            return True,pro_pivot[-1].zg#support price
-        else:
-            return False,0
-             #no slow down
-# =============================================================================
-#         if not np.mean( pro_pivot[-3][0:2]) / np.mean(pro_pivot[-2][0:2]) > \
-#         np.mean(pro_pivot[-2][0:2]) / np.mean(pro_pivot[-1][0:2]):
-#             return False,0
-#         if num_pivot == 3:
-#             if pro_pivot[-4][2]>pro_pivot[-3][2] and  pro_pivot[-3][2]>pro_pivot[-2][2] \
-#             :
-#                 return True,pro_pivot[-1][0]
-#             else:
-#                 return False,0  
-#         if num_pivot == 2:
-#             if pro_pivot[-3][2]>pro_pivot[-2][2] and pro_pivot[-2][2]>pro_pivot[-1][2] \
-#             :
-#                 return True,pro_pivot[-1][0]
-#             else:
-#                 return False,0  
-# =============================================================================
-def buy_point23(pro_pivot,tails):
-    if len(pro_pivot)<=3 or pro_pivot[-1].finished!=1 or \
-    pro_pivot[-1].level > 1 or df1.iloc[-1][0]/pro_pivot[-1].leave_end_price -1>0 or \
-     df1.iloc[-1][0] > tails[3]:
-        return False,0
-    else:#two pivot descending
-        #no slow down
-        if df1.iloc[-1][0] <0.98*pro_pivot[-1].leave_end_price and df1.iloc[-1][0] >1.01*pro_pivot[-1].zg and pro_pivot[-1].trend==-1 \
-        and tails[3] >1.01*\
-         pro_pivot[-1].zg and tails[0] == pro_pivot[-1].leave_end_time  and \
-         pro_pivot[-1].leave_start_price ==pro_pivot[-1].dd:
-             return True,pro_pivot[-1].zg# support price
-        else:
-            return False,0 
-       
+@dataclass
+class Line:
+    """线段"""
+    symbol: str
+    freq: str
+    id: int
+    direction: str
+    start_dt: datetime
+    end_dt: datetime
+    high: float = None
+    low: float = None
+    power: float = None
+    seqs: List[Seq] = None
+    fx_a: SeqFX = None  # 线段开始的分型
+    fx_b: SeqFX = None  # 线段结束的分型
 
-def sell_point1(pro_pivot,tails,num_pivot=2):
-    if len(pro_pivot)<=3 or tails[4]==-1 or pro_pivot[-1].size>=8 or pro_pivot[-1].finished!=0\
-     or df1.iloc[-1][1]/pro_pivot[-1].leave_end_price -1<0 or \
-     df1.iloc[-1][0] < tails[3]:
-        return False,0
-    else:#two pivot descending
-        #no slow down
-        if ( pro_pivot[-1].prev2_end_price <pro_pivot[-1].leave_end_price ) and \
-        (pro_pivot[-1].leave_start_time==tails[0]) and\
-             df1.iloc[-1][0] > pro_pivot[-1].zg and \
-            1.2*pro_pivot[-1].leave_force <pro_pivot[-1].prev2_force:
-            return True,pro_pivot[-1].zg #buyback and suppor price
-        else:
-            return False,0  
-        
-def sell_point2(pro_pivot,tails,num_pivot=2):
-    if len(pro_pivot)<=3 or tails[4]==-1 or pro_pivot[-1].size>=8 or pro_pivot[-1].finished!=0\
-    or df1.iloc[-1][1]/pro_pivot[-1].leave_end_price -1<0 or \
-     df1.iloc[-1][0] < tails[3]:
-        return False,0
-    else:#two pivot descending
-        #no slow down
-        if ( pro_pivot[-1].prev2_end_price >pro_pivot[-1].leave_end_price ) and \
-        (pro_pivot[-1].leave_start_time==tails[0]) and\
-             df1.iloc[-1][0] > 0.51*(pro_pivot[-1].zd+pro_pivot[-1].zg) and \
-            pro_pivot[-1].prev2_end_price==pro_pivot[-1].gg:
-            return True,pro_pivot[-1].zg #buyback and support price
-        else:
-            return False,0  
-        
-def sell_point3_ris(pro_pivot,tails,num_pivot=2):
-    if len(pro_pivot)<=3 or tails[4]==-1 or pro_pivot[-1].size>=8 or pro_pivot[-1].finished!=1 \
-    or \
-     df1.iloc[-1][0] < tails[3]:
-        return False,0
-    else:#two pivot descending
-        #no slow down
-        if ( 1.02*pro_pivot[-1].leave_end_price < df1.iloc[-1][0] ) and \
-        (pro_pivot[-1].leave_end_time==tails[0]) and \
-            pro_pivot[-1].leave_force>pro_pivot[-1].prev2_force\
-            and df1.iloc[-1][1]<pro_pivot[-1].zd:
-            return True,pro_pivot[-1].zd # resistance price
-        else:
-            return False,0
+@dataclass
+class BiHub:
+    """笔构成的中枢"""
+    id: int
+    symbol: str
+    freq: str
+    ZG: float
+    ZD: float
+    GG: float
+    DD: float
+    entry: BI = None
+    leave: BI = None
+    elements: List[BI] = None # 奇数位的笔
 
+@dataclass
+class LineHub:
+    """线段构成的中枢"""
+    id: int
+    symbol: str
+    freq: str
+    ZG: float
+    ZD: float
+    GG: float
+    DD: float
+    entry: Line = None
+    leave: Line = None
+    elements: List[Line] = None # 奇数位的笔
+
+def debug_plot_peak_valley_factors(df_PV, df_HL):
+    fig = go.Figure()
+
+    # Add bars for each direction
+    fig.add_trace(go.Bar(x=df_HL.index,
+                         y=df_HL['High'] - df_HL['Low'],
+                         base=df_HL['Low'],
+                         marker_color=df_HL['direction'].apply(
+                             lambda x: 'green' if x == 'Bullish' else 'red'),
+                         name='Directional Bars'))
+
+    # Add markers for 'peak'
+    fig.add_trace(go.Scatter(x=df_PV[df_PV['pv_type'] == 'Peak'].index,
+                             y=df_PV[df_PV['pv_type'] == 'Peak']['High'] * 1.01,
+                             mode='markers',
+                             marker=dict(color='blue', size=10),
+                             name='Peak'))
+
+    # Add markers for 'valley'
+    fig.add_trace(go.Scatter(x=df_PV[df_PV['pv_type'] == 'Valley'].index,
+                             y=df_PV[df_PV['pv_type'] == 'Valley']['Low'] * 0.99,
+                             mode='markers',
+                             marker=dict(color='red', size=10),
+                             name='Valley'))
+
+    # Add lines connecting peaks and valleys
+    for i in range(len(df_PV) - 1):
+        current_row = df_PV.iloc[i]
+        next_row = df_PV.iloc[i + 1]
+
+        current_value = current_row['High'] if current_row['pv_type'] == 'Peak' else current_row['Low']
+        next_value = next_row['High'] if next_row['pv_type'] == 'Peak' else next_row['Low']
+
+        fig.add_trace(go.Scatter(x=[current_row.name, next_row.name],
+                                 y=[current_value, next_value],
+                                 mode='lines',
+                                 line=dict(color='black', width=1),
+                                 showlegend=False))  # Don't show these lines in the legend
+
+    # Adjust layout to remove slide bar and add legend
+    fig.update_layout(xaxis_rangeslider_visible=False, showlegend=True)
+    fig.show()
+
+def debug_plot_segments(df_PV, df_HL, df_segments):
+    # Create a new figure
+    fig = go.Figure()
+
+    # Add bars for each direction in df_HL
+    fig.add_trace(go.Bar(x=df_HL.index,
+                         y=df_HL['High'] - df_HL['Low'],
+                         base=df_HL['Low'],
+                         marker_color=df_HL['direction'].apply(
+                             lambda x: 'green' if x == 'Bullish' else 'red'),
+                         name='Directional Bars',
+                         opacity=0.6))  # Adjusting opacity for better visualization
+
+    # Iterate over each segment
+    for i, row in enumerate(df_segments.iterrows()):
+        # Get start and end indexes
+        _, row = row  # row is a tuple of (index, row_data)
+        start_idx = row['idx_start']
+        end_idx = row['idx_end']
+
+        # Find the corresponding rows in df_PV
+        start_row = df_PV.loc[start_idx]
+        end_row = df_PV.loc[end_idx]
+
+        # Determine which value to use (High for Peak and Low for Valley)
+        start_value = start_row['High'] if start_row['pv_type'] == 'Peak' else start_row['Low']
+        end_value = end_row['High'] if end_row['pv_type'] == 'Peak' else end_row['Low']
+
+        # Add a line trace for this segment
+        fig.add_trace(go.Scatter(x=[start_idx, end_idx],
+                                 y=[start_value, end_value],
+                                 mode='lines+markers',
+                                 line=dict(width=2, color='black'),
+                                 name='Segment' if i == 0 else None,  # Only show legend for the first segment
+                                 showlegend=i == 0))
+
+    # Set layout options
+    fig.update_layout(title='Line Segments',
+                      xaxis_title='Date',
+                      yaxis_title='Price',
+                      showlegend=True,
+                      xaxis_rangeslider_visible=False)
+
+    # Show the plot
+    fig.show()
+
+def debug_plot_hubs_using_HL(df_PV, df_HL, df_hubs):
+
+    # Create a new figure
+    fig = go.Figure()
+
+    # calculate the hub directions
+    pre_hub_high = -1.
+    pre_hub_low = -1.
+    df_hubs['color'] = 'green'
+    for idx_hub, hub in df_hubs.iterrows():
+        cur_hub_high = hub['high']
+        cur_hub_low = hub['low']
+        if cur_hub_low > pre_hub_high:
+            df_hubs.at[idx_hub, 'direction'] = 'up'
+            df_hubs.at[idx_hub, 'color'] = 'green'
+        elif cur_hub_high < pre_hub_low:
+            df_hubs.at[idx_hub, 'direction'] = 'down'
+            df_hubs.at[idx_hub, 'color'] = 'red'
+        # update pre hub high and low
+        pre_hub_high = cur_hub_high
+        pre_hub_low = cur_hub_low
+
+    # Add bars for each direction in df_HL
+    fig.add_trace(go.Bar(x=df_HL.index,
+                         y=df_HL['High'] - df_HL['Low'],
+                         base=df_HL['Low'],
+                         marker_color=df_HL['direction'].apply(
+                             lambda x: 'green' if x == 'Bullish' else 'red'),
+                         name='Directional Bars',
+                         opacity=0.6))  # Adjusting opacity for better visualization
+
+    # Iterate over df_PV to draw consecutive lines
+    for i in range(len(df_PV) - 1):
+        # Current point
+        start_idx = df_PV.index[i]
+        start_value = df_PV.iloc[i]['factor_value']
+
+        # Next point
+        end_idx = df_PV.index[i + 1]
+        end_value = df_PV.iloc[i + 1]['factor_value']
+
+        # Add a line trace for this segment
+        fig.add_trace(go.Scatter(x=[start_idx, end_idx],
+                                 y=[start_value, end_value],
+                                 mode='lines+markers',
+                                 line=dict(width=2, color='black')))
+
+    # Iterate over each hub to draw rectangles
+    for _, hub in df_hubs.iterrows():
+        hub_color = hub['color']
+
+        # Add a rectangle to represent the hub zone
+        fig.add_shape(type="rect",
+                      x0=hub['start_idx'], y0=hub['low'],
+                      x1=hub['end_idx'], y1=hub['high'],
+                      line=dict(color=hub_color),
+                      fillcolor=hub_color,
+                      opacity=0.2)
+
+    # Set layout options
+    fig.update_layout(title='Line Segments with Hubs',
+                      xaxis_title='Date',
+                      yaxis_title='Price',
+                      showlegend=False,
+                      xaxis_rangeslider_visible=False)
+
+    # Show the plot
+    fig.show()
+
+def debug_plot_hubs_using_OHLC(df_PV, df_OHLC, df_hubs):
+    # Create a new figure
+    fig = go.Figure()
+
+    # Calculate the hub directions
+    pre_hub_high = -1.
+    pre_hub_low = -1.
+    df_hubs['color'] = 'green'
+    for idx_hub, hub in df_hubs.iterrows():
+        cur_hub_high = hub['high']
+        cur_hub_low = hub['low']
+        if cur_hub_low > pre_hub_high:
+            df_hubs.at[idx_hub, 'direction'] = 'up'
+            df_hubs.at[idx_hub, 'color'] = 'green'
+        elif cur_hub_high < pre_hub_low:
+            df_hubs.at[idx_hub, 'direction'] = 'down'
+            df_hubs.at[idx_hub, 'color'] = 'red'
+        pre_hub_high = cur_hub_high
+        pre_hub_low = cur_hub_low
+
+    # Add candlestick trace for OHLC data
+    fig.add_trace(go.Candlestick(x=df_OHLC.index,
+                                 open=df_OHLC['Open'],
+                                 high=df_OHLC['High'],
+                                 low=df_OHLC['Low'],
+                                 close=df_OHLC['Close'],
+                                 name='OHLC'))
+
+    # Iterate over df_PV to draw consecutive lines
+    for i in range(len(df_PV) - 1):
+        # Current point
+        start_idx = df_PV.index[i]
+        start_value = df_PV.iloc[i]['factor_value']
+
+        # Next point
+        end_idx = df_PV.index[i + 1]
+        end_value = df_PV.iloc[i + 1]['factor_value']
+
+        # Add a line trace for this segment
+        fig.add_trace(go.Scatter(x=[start_idx, end_idx],
+                                 y=[start_value, end_value],
+                                 mode='lines+markers',
+                                 line=dict(width=2, color='black')))
+
+    # Iterate over each hub to draw rectangles
+    for _, hub in df_hubs.iterrows():
+        hub_color = hub['color']
+
+        # Add a rectangle to represent the hub zone
+        fig.add_shape(type="rect",
+                      x0=hub['start_idx'], y0=hub['low'],
+                      x1=hub['end_idx'], y1=hub['high'],
+                      line=dict(color=hub_color),
+                      fillcolor=hub_color,
+                      opacity=0.2)
+
+    # Set layout options
+    fig.update_layout(title='OHLC with Line Segments and Hubs',
+                      xaxis_title='Date',
+                      yaxis_title='Price',
+                      showlegend=True,
+                      xaxis_rangeslider_visible=False)
+
+    # Show the plot
+    fig.show()
+
+def debug_plot_hubs(df_PV, df_HL, df_OHLC, df_hubs):
+    # Create a new figure
+    fig = go.Figure()
+
+    # Calculate the hub directions
+    pre_hub_high = -1.
+    pre_hub_low = -1.
+    df_hubs['color'] = 'green'
+    for idx_hub, hub in df_hubs.iterrows():
+        cur_hub_high = hub['high']
+        cur_hub_low = hub['low']
+        if cur_hub_low > pre_hub_high:
+            df_hubs.at[idx_hub, 'direction'] = 'up'
+            df_hubs.at[idx_hub, 'color'] = 'green'
+        elif cur_hub_high < pre_hub_low:
+            df_hubs.at[idx_hub, 'direction'] = 'down'
+            df_hubs.at[idx_hub, 'color'] = 'red'
+        pre_hub_high = cur_hub_high
+        pre_hub_low = cur_hub_low
+
+    # Add HL bars
+    fig.add_trace(go.Bar(x=df_HL.index,
+                         y=df_HL['High'] - df_HL['Low'],
+                         base=df_HL['Low'],
+                         marker_color=df_HL['direction'].apply(
+                             lambda x: 'green' if x == 'Bullish' else 'red'),
+                         name='HL Bars',
+                         opacity=0.6))
+
+    # Add OHLC candlestick trace
+    fig.add_trace(go.Candlestick(x=df_OHLC.index,
+                                 open=df_OHLC['Open'],
+                                 high=df_OHLC['High'],
+                                 low=df_OHLC['Low'],
+                                 close=df_OHLC['Close'],
+                                 name='OHLC',
+                                 increasing_line=dict(color='green'),
+                                 decreasing_line=dict(color='red')))
+
+    # Iterate over df_PV to draw consecutive lines
+    for i in range(len(df_PV) - 1):
+        # Current point
+        start_idx = df_PV.index[i]
+        start_value = df_PV.iloc[i]['factor_value']
+
+        # Next point
+        end_idx = df_PV.index[i + 1]
+        end_value = df_PV.iloc[i + 1]['factor_value']
+
+        # Add a line trace for this segment
+        fig.add_trace(go.Scatter(x=[start_idx, end_idx],
+                                 y=[start_value, end_value],
+                                 mode='lines+markers',
+                                 line=dict(width=2, color='black'),
+                                 name='PV Lines' if i == 0 else None,  # Only show legend for the first line
+                                 showlegend=(i == 0)))
+
+    # Iterate over each hub to draw rectangles
+    for _, hub in df_hubs.iterrows():
+        hub_color = hub['color']
+
+        # Add a rectangle to represent the hub zone
+        fig.add_shape(type="rect",
+                      x0=hub['start_idx'], y0=hub['low'],
+                      x1=hub['end_idx'], y1=hub['high'],
+                      line=dict(color=hub_color),
+                      fillcolor=hub_color,
+                      opacity=0.2)
+
+    # Set layout options
+    fig.update_layout(title='Chan Theory Central Zones (Hubs)',
+                      # xaxis_title='Date',
+                      # yaxis_title='Price',
+                      showlegend=True,
+                      legend=dict(orientation="h", y=1, yanchor="bottom", x=0.5, xanchor="center"),
+                      xaxis_rangeslider_visible=False)
+
+    # Show the plot
+    # fig.show()
+
+    return fig
 
 def apply_containing_pattern(df_OHLC_mid,
                              use_high_low=False,
-                             debug_plot=False,
+                             debug_plot=DEBUG_PLOT,
                              ):
+
     ### --- Re-arrange the highs and lows
     # convert the 'Open' and 'Close' to a single series representing potential highs and lows
     if use_high_low:
@@ -921,257 +527,942 @@ def apply_containing_pattern(df_OHLC_mid,
     # verify if the high is always higher than the low
     assert (df_HL['High'] >= df_HL['Low']).all()
 
-    # # create a numerical index saved as a column for later use
-    # df_HL['Idx'] = range(len(df_HL))
-    #
-    # ### --- Find the containing patterns
-    # # if any candle is contained by the previous candle (high < previous high and low > previous low), the
-    # # label the index of the candles that are contained by the previous candle
-    # counter_processing = 0
-    # while True:
-    #
-    #     # verify if further processing is needed
-    #     df_HL['contain_type_1'] = False  # contained by the previous candle
-    #     df_HL['contain_type_2'] = False  # containing the previous candle
-    #     df_HL.loc[(df_HL['High'] <= df_HL['High'].shift(1)) & (
-    #                 df_HL['Low'] >= df_HL['Low'].shift(1)), 'contain_type_1'] = True
-    #     df_HL.loc[(df_HL['High'] >= df_HL['High'].shift(1)) & (
-    #                 df_HL['Low'] <= df_HL['Low'].shift(1)), 'contain_type_2'] = True
-    #     df_HL['is_contained'] = df_HL['contain_type_1'] | df_HL['contain_type_2']
-    #
-    #     # if there is no containing patterns, break the loop; otherwise, proceed to process the containing patterns
-    #     if not df_HL['is_contained'].any():
-    #
-    #         # visualization
-    #         if debug_plot:
-    #             fig = go.Figure(data=[go.Candlestick(x=df_HL.index,
-    #                                                  open=df_HL['Low'],
-    #                                                  high=df_HL['High'],
-    #                                                  low=df_HL['Low'],
-    #                                                  close=df_HL['High'],
-    #                                                  name='HL')])
-    #             fig.update_layout(xaxis_rangeslider_visible=False, showlegend=True)
-    #             fig.show()
-    #
-    #         # drop temporary columns and break the loop
-    #         df_HL = df_HL[['High', 'Low', 'Idx']]
-    #         break
-    #
-    #     # Print counter
-    #     counter_processing += 1
-    #     # debug_logging(f'Processing containing patterns, round {counter_processing}')
-    #
-    #     # Further processing starts here. First identify the first containing candle.
-    #     df_HL['is_contained_to_process'] = False
-    #     df_HL.loc[(df_HL['is_contained'] == True) & (
-    #             df_HL['is_contained'] != df_HL['is_contained'].shift(1)), 'is_contained_to_process'] = True
-    #
-    #     # calculate the candle directions
-    #     df_HL['direction'] = 'Bearish'  # Default to 'Bearish'
-    #     df_HL.loc[df_HL['High'] > df_HL['High'].shift(1), 'direction'] = 'Bullish'
-    #
-    #     # initialize the index to be removed
-    #     df_HL['to_remove'] = False
-    #
-    #     # --- Visualization
-    #     if debug_plot:
-    #         # plot the df_OHLC_mid
-    #         fig = go.Figure(data=[go.Candlestick(x=df_HL.index,
-    #                                              open=df_HL['Low'],
-    #                                              high=df_HL['High'],
-    #                                              low=df_HL['Low'],
-    #                                              close=df_HL['High'],
-    #                                              name='HL')])
-    #
-    #         # Add markers for 'is_contained'
-    #         fig.add_trace(go.Scatter(x=df_HL[df_HL['is_contained']].index,
-    #                                  y=df_HL[df_HL['is_contained']]['High'] + 1,
-    #                                  mode='markers',
-    #                                  marker=dict(color='blue', size=10),
-    #                                  name='Contained'))
-    #
-    #         # Add markers for 'is_contained_to_process'
-    #         fig.add_trace(go.Scatter(x=df_HL[df_HL['is_contained_to_process']].index,
-    #                                  y=df_HL[df_HL['is_contained_to_process']]['Low'] - 1,
-    #                                  mode='markers',
-    #                                  marker=dict(color='red', size=10),
-    #                                  name='Contained to Process'))
-    #
-    #         # Adjust layout to remove slide bar and add legend
-    #         fig.update_layout(xaxis_rangeslider_visible=False, showlegend=True)
-    #         fig.show()
-    #
-    #     # Process the first containing candles
-    #     for i in range(1, len(df_HL)):
-    #         if df_HL.iloc[i]['is_contained_to_process']:
-    #             if df_HL.iloc[i]['direction'] == 'Bearish':
-    #                 # Take the lower high and lower low of the current and previous highs/lows
-    #                 df_HL.at[df_HL.index[i], 'High'] = min(df_HL.at[df_HL.index[i], 'High'],
-    #                                                        df_HL.at[df_HL.index[i - 1], 'High'])
-    #                 df_HL.at[df_HL.index[i], 'Low'] = min(df_HL.at[df_HL.index[i], 'Low'],
-    #                                                       df_HL.at[df_HL.index[i - 1], 'Low'])
-    #                 df_HL.at[df_HL.index[i - 1], 'to_remove'] = True
-    #             else:
-    #                 # Take the higher high and higher low of the current and previous highs/lows
-    #                 df_HL.at[df_HL.index[i], 'High'] = max(df_HL.at[df_HL.index[i], 'High'],
-    #                                                        df_HL.at[df_HL.index[i - 1], 'High'])
-    #                 df_HL.at[df_HL.index[i], 'Low'] = max(df_HL.at[df_HL.index[i], 'Low'],
-    #                                                       df_HL.at[df_HL.index[i - 1], 'Low'])
-    #                 df_HL.at[df_HL.index[i - 1], 'to_remove'] = True
-    #
-    #     # remove rows, reset status, and finish this round of processing
-    #     df_HL = df_HL[df_HL['to_remove'] == False]
-    #     df_HL.drop(['is_contained', 'contain_type_1', 'contain_type_2', 'direction',
-    #                 'is_contained_to_process', 'to_remove'], axis=1, inplace=True)
+    # create a numerical index saved as a column for later use
+    df_HL['Idx'] = range(len(df_HL))
+
+    ### --- Find the containing patterns
+    # if any candle is contained by the previous candle (high < previous high and low > previous low), the
+    # label the index of the candles that are contained by the previous candle
+    counter_processing = 0
+    while True:
+
+        # verify if further processing is needed
+        df_HL['contain_type_1'] = False  # contained by the previous candle
+        df_HL['contain_type_2'] = False  # containing the previous candle
+        df_HL.loc[(df_HL['High'] <= df_HL['High'].shift(1)) & (df_HL['Low'] >= df_HL['Low'].shift(1)), 'contain_type_1'] = True
+        df_HL.loc[(df_HL['High'] >= df_HL['High'].shift(1)) & (df_HL['Low'] <= df_HL['Low'].shift(1)), 'contain_type_2'] = True
+        df_HL['is_contained'] = df_HL['contain_type_1'] | df_HL['contain_type_2']
+
+        # if there is no containing patterns, break the loop; otherwise, proceed to process the containing patterns
+        if not df_HL['is_contained'].any():
+
+            # visualization
+            if debug_plot:
+                fig = go.Figure(data=[go.Candlestick(x=df_HL.index,
+                                                     open=df_HL['Low'],
+                                                     high=df_HL['High'],
+                                                     low=df_HL['Low'],
+                                                     close=df_HL['High'],
+                                                     name='HL')])
+                fig.update_layout(xaxis_rangeslider_visible=False, showlegend=True)
+                fig.show()
+
+            # drop temporary columns and break the loop
+            df_HL = df_HL[['High', 'Low', 'Idx']]
+            break
+
+        # Print counter
+        counter_processing += 1
+        # debug_logging(f'Processing containing patterns, round {counter_processing}')
+
+        # Further processing starts here. First identify the first containing candle.
+        df_HL['is_contained_to_process'] = False
+        df_HL.loc[(df_HL['is_contained'] == True) & (
+                    df_HL['is_contained'] != df_HL['is_contained'].shift(1)), 'is_contained_to_process'] = True
+
+        # calculate the candle directions
+        df_HL['direction'] = 'Bearish'  # Default to 'Bearish'
+        df_HL.loc[df_HL['High'] > df_HL['High'].shift(1), 'direction'] = 'Bullish'
+
+        # initialize the index to be removed
+        df_HL['to_remove'] = False
+
+        # --- Visualization
+        if debug_plot:
+            # plot the df_OHLC_mid
+            fig = go.Figure(data=[go.Candlestick(x=df_HL.index,
+                                                 open=df_HL['Low'],
+                                                 high=df_HL['High'],
+                                                 low=df_HL['Low'],
+                                                 close=df_HL['High'],
+                                                 name='HL')])
+
+            # Add markers for 'is_contained'
+            fig.add_trace(go.Scatter(x=df_HL[df_HL['is_contained']].index,
+                                     y=df_HL[df_HL['is_contained']]['High'] + 1,
+                                     mode='markers',
+                                     marker=dict(color='blue', size=10),
+                                     name='Contained'))
+
+            # Add markers for 'is_contained_to_process'
+            fig.add_trace(go.Scatter(x=df_HL[df_HL['is_contained_to_process']].index,
+                                     y=df_HL[df_HL['is_contained_to_process']]['Low'] - 1,
+                                     mode='markers',
+                                     marker=dict(color='red', size=10),
+                                     name='Contained to Process'))
+
+            # Adjust layout to remove slide bar and add legend
+            fig.update_layout(xaxis_rangeslider_visible=False, showlegend=True)
+            fig.show()
+
+        # Process the first containing candles
+        for i in range(1, len(df_HL)):
+            if df_HL.iloc[i]['is_contained_to_process']:
+                if df_HL.iloc[i]['direction'] == 'Bearish':
+                    # Take the lower high and lower low of the current and previous highs/lows
+                    df_HL.at[df_HL.index[i], 'High'] = min(df_HL.at[df_HL.index[i], 'High'],
+                                                           df_HL.at[df_HL.index[i - 1], 'High'])
+                    df_HL.at[df_HL.index[i], 'Low'] = min(df_HL.at[df_HL.index[i], 'Low'],
+                                                          df_HL.at[df_HL.index[i - 1], 'Low'])
+                    df_HL.at[df_HL.index[i - 1], 'to_remove'] = True
+                else:
+                    # Take the higher high and higher low of the current and previous highs/lows
+                    df_HL.at[df_HL.index[i], 'High'] = max(df_HL.at[df_HL.index[i], 'High'],
+                                                           df_HL.at[df_HL.index[i - 1], 'High'])
+                    df_HL.at[df_HL.index[i], 'Low'] = max(df_HL.at[df_HL.index[i], 'Low'],
+                                                          df_HL.at[df_HL.index[i - 1], 'Low'])
+                    df_HL.at[df_HL.index[i - 1], 'to_remove'] = True
+
+        # remove rows, reset status, and finish this round of processing
+        df_HL = df_HL[df_HL['to_remove']==False]
+        df_HL.drop(['is_contained', 'contain_type_1', 'contain_type_2', 'direction',
+                    'is_contained_to_process', 'to_remove'], axis=1, inplace=True)
+
     return df_HL
 
-def main(df_OHLC_mid):
+def find_raw_peaks_valleys(df_HL, debug_plot=DEBUG_PLOT):
 
-    df_HL = apply_containing_pattern(df_OHLC_mid)
-    df_HL.columns = ['high','low']
-    df_HL = df_HL[['low', 'high']]
+    # first find all potential peak and valley factors
+    df_HL['is_peak'] = (df_HL['High'] > df_HL['High'].shift(1)) & (df_HL['High'] > df_HL['High'].shift(-1))
+    df_HL['is_valley'] = (df_HL['Low'] < df_HL['Low'].shift(1)) & (df_HL['Low'] < df_HL['Low'].shift(-1))
 
-    df=pd.read_csv('C:/Users/Administrator/Desktop/ecom/chanlun/sh.csv',index_col=0)[['low','high']]
-    df2=pd.read_csv('G:\My Drive\Investing\QuantTrading\module_pattern\sh.csv',index_col=0)[['low','high']]
+    # calculate the direction - bullish or bearish
+    # bullish - the current high is higher than the prior high
+    # bearish - otherwise
+    df_HL['direction'] = 'Bearish'  # Default to 'Bearish'
+    df_HL.loc[df_HL['High'] > df_HL['High'].shift(1), 'direction'] = 'Bullish'
 
-    df['datetime']=df.index
-    #REMOVE INCLUSION
-    while ( True ):
-        temp_len = len(df)
-        i=0
-        while i<=len(df)-4:
-            if (df.iloc[i+2,0]>=df.iloc[i+1,0] and df.iloc[i+2,1]<=df.iloc[i+1,1]) or\
-            (df.iloc[i+2,0]<=df.iloc[i+1,0] and df.iloc[i+2,1]>=df.iloc[i+1,1]):
-                if df.iloc[i+1,0]>df.iloc[i,0]:
-                    df.iloc[i+2,0] = max(df.iloc[i+1:i+3,0])
-                    df.iloc[i+2,1] = max(df.iloc[i+1:i+3,1])
-                    df.drop(df.index[i+1],inplace=True)
-                    
-                    continue
-                else:
-                    df.iloc[i+2,0] = min(df.iloc[i+1:i+3,0])
-                    df.iloc[i+2,1] = min(df.iloc[i+1:i+3,1])
-                    df.drop(df.index[i+1],inplace=True)
-                    
-                    continue
-            i = i + 1
-       # print(len(df))    
-        if len(df)==temp_len:
-            break
-            
-    df= df.reset_index(drop=True)  
-    #get difenxing and dingfenxing
-    ul=[0]
-    for i in range(len(df)-2):
-        if df.iloc[i+2,0] < df.iloc[i+1,0] and df.iloc[i,0] < df.iloc[i+1,0]:
-            ul = ul + [1]
-            continue
-        if df.iloc[i+2,0] > df.iloc[i+1,0] and df.iloc[i,0] > df.iloc[i+1,0]:
-            ul = ul + [-1]# difenxing -1 dingfenxing +1
-            continue
-        else:
-            ul = ul + [0]
-    ul = ul + [0]
-    global df1
-    df1 = pd.concat((df[['low','high']],pd.DataFrame(ul),df['datetime']),axis=1)
-      
-    i = 0
-    
-    while df1.iloc[i,2] == 0 and i < len(df1)-2:
-        i = i + 1
-    df1=df1[i:]  
-    
-    i = 0
-    while ( sum(abs(df1.iloc[i+1:i+4,2]))>0 or df1.iloc[i,2]==0) and i < len(df1)-2:
-        i = i + 1
-    df1=df1[i:]
-    df1.rename(columns= {0:'od'},inplace=True)
-    #df1.columns=Index(['low', 'high', 'od', 'datetime'], dtype='object')
-    if len(df1)<=60:
-        print('error!')
-        return ;
-    #remove those within 3 bars
-    df1=df1.reset_index(drop=True)
-    global od_list#od_list are the index of df1 whose corresponding point are fenxing extreme vertex
-    
-    od_list=[0]
-    judge(0,0,1) 
-    #od_list are the index of df1 whose corresponding point are fenxing extreme vertex
-    #od_list are the index of df1 whose corresponding point are fenxing extreme vertex
-    #od_list are the index of df1 whose corresponding point are fenxing extreme vertex
-    #od_list are the index of df1 whose corresponding point are fenxing extreme vertex
-    #od_list are the index of df1 whose corresponding point are fenxing extreme vertex
-    #od_list are the index of df1 whose corresponding point are fenxing extreme vertex
-    
-    
-    #generate seg
-    start = 0
-    while start < len(od_list)-5:
-        if check_init_seg(od_list[start:start+4]):
-            break
-        else:
-            start = start + 1
-    
-    lines = []
-    
-    i = start
-    end = False
-    while i <= len(od_list)-4:
-        se = Seg(od_list[i:i+4])
-        label = False
-        while label == False and i <= len(od_list)-6:
-            i = i + 2
-            label,start = se.grow(od_list[i+2:i+4])
-            if se.vertex[-1] > od_list[-3]:
-                end =True
-                
-                lines += [se.lines()]
-                break
-        if end:
-            break
-        i =  np.where(np.array(od_list) == se.vertex[-1])[0][0]
-        #show datetime of the end of the segment
-        #print(df1.iloc[se.vertex[-1],3])   
-        lines += [se.lines()]#there are still remaining fewer than or equal to 
-        #3 bies not considered in the last
-        #seg ,which is unfinished and named by tails
-    low_list=df1.iloc[se.vertex[-1]:,0]
-    high_list=df1.iloc[se.vertex[-1]:,1]
-    
-    low_extre=low_list.min()
-    high_extre=high_list.max()
-    if se.finished == True:
-        if lines[-1][0][1] < lines[-1][1][1] :#d==1
-            lines += [ [(se.vertex[-1],lines[-1][1][1]),(low_list.idxmin(),low_extre)]]
-        else:
-            lines += [ [(se.vertex[-1],lines[-1][1][1]),(high_list.idxmax(),high_extre)]]
-            
+    # also calculate the peak and valley high/low values
+    df_HL['pv_high'] = np.nan
+    for i in range(1, len(df_HL)-1):
+        if df_HL.iloc[i]['is_peak'] | df_HL.iloc[i]['is_valley']:
+
+            # the pv_high is defined as the highest value among the current and previous and next highs
+            df_HL.at[df_HL.index[i], 'pv_high'] = max(df_HL.at[df_HL.index[i], 'High'],
+                                                      df_HL.at[df_HL.index[i - 1], 'High'],
+                                                      df_HL.at[df_HL.index[i + 1], 'High'])
+            df_HL.at[df_HL.index[i], 'pv_low'] = min(df_HL.at[df_HL.index[i], 'Low'],
+                                                     df_HL.at[df_HL.index[i - 1], 'Low'],
+                                                     df_HL.at[df_HL.index[i + 1], 'Low'])
+
+    # save the peaks and valleys to a new DataFrame
+    df_PV = df_HL[(df_HL['is_peak'] | df_HL['is_valley'])].copy()
+    df_PV['pv_type'] = ''
+    df_PV.loc[df_PV['is_peak']==True, 'pv_type'] = 'Peak'
+    df_PV.loc[df_PV['is_valley']==True, 'pv_type'] = 'Valley'
+
+    # manually add the first and last factors as factors
+    df_PV_start = df_HL.iloc[[0]].copy()
+    df_PV_start['pv_high'] = df_PV_start['High']
+    df_PV_start['pv_low'] = df_PV_start['Low']
+    if df_PV['pv_type'].iloc[0] == 'Peak':
+        df_PV_start['pv_type'] = 'Valley'
+        df_PV_start['is_valley'] = True
     else:
-        if lines[-1][0][1] < lines[-1][1][1] :#d==1
-            if low_extre > lines[-1][0][1]:
-                lines[-1] = [ (lines[-1][0][0],lines[-1][0][1]),(high_list.idxmax(),high_extre)] 
+        df_PV_start['pv_type'] = 'Peak'
+        df_PV_start['is_peak'] = True
+
+    df_PV_end = df_HL.iloc[[-1]].copy()
+    df_PV_end['pv_high'] = df_PV_end['High']
+    df_PV_end['pv_low'] = df_PV_end['Low']
+    if df_PV['pv_type'].iloc[-1] == 'Peak':
+        df_PV_end['pv_type'] = 'Valley'
+        df_PV_end['is_valley'] = True
+    else:
+        df_PV_end['pv_type'] = 'Peak'
+        df_PV_end['is_peak'] = True
+
+    df_PV = pd.concat([df_PV_start, df_PV, df_PV_end], axis=0)
+
+    # verify that the peak and valley types are alternating without repeating
+    assert (df_PV['pv_type'] != df_PV['pv_type'].shift(1)).all()
+
+    return df_PV
+
+def refine_peaks_valleys(df_PV, df_HL, debug_plot=DEBUG_PLOT):
+
+    if debug_plot:
+        debug_plot_peak_valley_factors(df_PV, df_HL)
+
+    while True:
+
+        ### Extract clusters that have several too-close factors
+        clusters = []
+        cluster_start = None
+        for i in range(0, len(df_PV)):
+            # debug_logging(f'Processing {i}th factor')
+
+            # if the current factor is the first factor
+            if i == 0:
+                if df_PV['Idx'].iloc[i + 1] - df_PV['Idx'].iloc[i] < 4:
+                    if cluster_start is None:
+                        cluster_start = i
+
+            # if the current factor is the last factor
+            elif i == len(df_PV) - 1:
+                if df_PV['Idx'].iloc[i] - df_PV['Idx'].iloc[i - 1] < 4:
+                    if cluster_start is not None:
+                        # End of the current cluster
+                        cluster_end = i
+                        clusters.append((cluster_start, cluster_end))
+                        cluster_start = None
+
+            # general case when the factor is in the middle
             else:
-                if low_list.idxmin()-se.vertex[-1]>=10:
-                    lines += [ [(se.vertex[-1],lines[-1][1][1]),(low_list.idxmin(),low_extre)]]
+                if df_PV['Idx'].iloc[i] - df_PV['Idx'].iloc[i - 1] >= 4 and \
+                      df_PV['Idx'].iloc[i + 1] - df_PV['Idx'].iloc[i] < 4:
+                        if cluster_start is None:
+                            cluster_start = i  # Start of a new cluster
+                elif df_PV['Idx'].iloc[i] - df_PV['Idx'].iloc[i - 1] < 4 and \
+                      df_PV['Idx'].iloc[i + 1] - df_PV['Idx'].iloc[i] >= 4:
+                        if cluster_start is not None:
+                            # End of the current cluster
+                            cluster_end = i
+                            clusters.append((cluster_start, cluster_end))
+                            cluster_start = None  # Reset for the next cluster
+
+        # if there is no too-close pv factors, break the loop
+        if len(clusters) == 0:
+            if debug_plot:
+                debug_plot_peak_valley_factors(df_PV, df_HL)
+            break
+
+        # --- Process one by one factor in each cluster
+        index_to_remove = []
+        cluster = clusters[0]
+        # debug_logging(f'Processing cluster: {cluster}')
+        # debug_logging(f'Index cluster: {df_PV.iloc[cluster[0]:cluster[1]+1].index.tolist()}')
+
+        # if the first factor is a peak
+        if df_PV.iloc[cluster[0]]['pv_type'] == 'Peak':
+
+            # -- extract neighboring factors
+            # current peak
+            cur_peak = df_PV.iloc[cluster[0]]['High']
+            cur_peak_idx = df_PV.index[cluster[0]]
+
+            # current valley (the one before)
+            if cluster[0] == 0:
+                cur_valley = -1.0
+            else:
+                cur_valley = df_PV.iloc[cluster[0]-1]['Low']
+                cur_valley_idx = df_PV.index[cluster[0]-1]
+
+            # next valley
+            next_valley = df_PV.iloc[cluster[0]+1]['Low']
+            next_valley_idx = df_PV.index[cluster[0]+1]
+
+            # next peak
+            if cluster[0] == len(df_PV)-2:
+                next_peak = 9e9
+            else:
+                next_peak = df_PV.iloc[cluster[0]+2]['High']
+                next_peak_idx = df_PV.index[cluster[0]+2]
+
+            # --- process the cluster
+            if next_valley < cur_valley:
+                # if the next valley is lower than the current valley, then the next valley is the new valley
+                index_to_remove += [cur_peak_idx, cur_valley_idx]
+            elif next_peak > cur_peak:
+                # if the next peak is higher than the current peak, then the next peak is the new peak
+                index_to_remove += [cur_peak_idx, next_valley_idx]
+            else:
+                # if the next peak is lower than the current peak, then the current peak is the new peak
+                index_to_remove += [next_peak_idx, next_valley_idx]
+
+        # if the first factor is a valley
         else:
-            
-            if high_extre < lines[-1][0][1]:
-                lines[-1] = [ (lines[-1][0][0],lines[-1][0][1]),(low_list.idxmin(),low_extre) ]
+
+            # -- extract neighboring factors
+            # current valley
+            cur_valley = df_PV.iloc[cluster[0]]['Low']
+            cur_valley_idx = df_PV.index[cluster[0]]
+
+            # current peak (the one before)
+            if cluster[0] == 0:
+                cur_peak = 9e9
             else:
-                if  high_list.idxmax()-se.vertex[-1]>=10:
-                    lines += [ [(se.vertex[-1],lines[-1][1][1]),(high_list.idxmax(),high_extre)]]   
-    
-    #print(lines)
-    #tails is the unfinished seg,tails[4] is its direction
-    #lines are the segment,lines[0] is the first segment's start_index,start_price,end_index,end_price
-    a,tails = get_pivot(lines)    
-    pro_a= process_pivot(a)
-    for i in range(len(pro_a)):
-        print('pivot {}\'s info:'.format(i))
-        pro_a[i].display()
-    print('these index are for df1,not df!,ex:pro_a[0].leave_end_time to obtain the leave end time')
-    
-     
-    
-if __name__=="__main__": 
-    main()
+                cur_peak = df_PV.iloc[cluster[0]-1]['High']
+                cur_peak_idx = df_PV.index[cluster[0]-1]
+
+            # next peak
+            next_peak = df_PV.iloc[cluster[0]+1]['High']
+            next_peak_idx = df_PV.index[cluster[0]+1]
+
+            # next valley
+            if cluster[0] == len(df_PV)-2:
+                next_valley = -1.0
+            else:
+                next_valley = df_PV.iloc[cluster[0]+2]['Low']
+                next_valley_idx = df_PV.index[cluster[0]+2]
+
+            # --- process the cluster
+            if next_peak > cur_peak:
+                # if the next peak is higher than the current peak, then the next peak is the new peak
+                index_to_remove += [cur_valley_idx, cur_peak_idx]
+            elif next_valley < cur_valley:
+                # if the next valley is lower than the current valley, then the next valley is the new valley
+                index_to_remove += [cur_valley_idx, next_peak_idx]
+            else:
+                # if the next valley is higher than the current valley, then the current valley is the new valley
+                index_to_remove += [next_valley_idx, next_peak_idx]
+
+        # remove all identified factors
+        df_PV.drop(index_to_remove, inplace=True)
+
+        # --- Visualization
+        if debug_plot:
+            debug_plot_peak_valley_factors(df_PV, df_HL)
+
+    # assert the factors are in alternating order
+    assert (df_PV['pv_type'] != df_PV['pv_type'].shift(1)).all()
+
+    return df_PV
+
+def find_segments(df_PV, df_HL, debug_plot=DEBUG_PLOT):
+
+    # assert the alternating pattern
+    assert (df_PV['pv_type'] != df_PV['pv_type'].shift(1)).all()
+
+    if debug_plot:
+        debug_plot_peak_valley_factors(df_PV, df_HL)
+
+    # Define an empty list to store segment data
+    segments = []
+
+    # extract segments using a loop
+    df_PV_copy = df_PV.copy()
+    while True:
+        seg_start = df_PV_copy.index[0]
+
+        if seg_start == df_PV.index[-1]:
+            break
+
+        # if the starting factor is a valley
+        if df_PV_copy.iloc[0]['pv_type'] == 'Valley':
+            seg_direction = 'up'
+
+            # check if a line just becomes a segment
+            segment_failed = False
+
+            # case when there are only two factors left, then it is the last "segment"
+            if len(df_PV_copy) == 2:
+                segment_failed = True
+                seg_end = df_PV_copy.index[1]
+            elif len(df_PV_copy) == 3:
+                segment_failed = True
+                if df_PV_copy.iloc[2]['Low'] < df_PV_copy.iloc[0]['Low']:
+                    seg_end = df_PV_copy.index[2]
+                else:
+                    seg_end = df_PV_copy.index[1]
+
+            if segment_failed:
+                segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                segments.append(segment_data)
+            # otherwise, a minimum segment can be found for at least two consecutive valleys
+            else:
+                # increasing trend
+                for i in range(3, len(df_PV_copy)):
+
+                    # case when the segment hits a first valley that breaks the monotonous increasing trend
+                    if df_PV_copy.iloc[i]['pv_type'] == 'Valley':
+                        if df_PV_copy.iloc[i]['Low'] < df_PV_copy.iloc[i-2]['Low']:
+                            seg_end = df_PV_copy.index[i-1]
+                            segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                            segments.append(segment_data)
+                            break
+                    # case when the segment hits a first peak that breaks the monotonous increasing trend
+                    else:
+                        if df_PV_copy.iloc[i]['High'] < df_PV_copy.iloc[i-2]['High']:
+                            seg_end = df_PV_copy.index[i-2]
+                            segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                            segments.append(segment_data)
+                            break
+
+                    # case when it is the end of the df_PV_copy
+                    if df_PV_copy.index[i] == df_PV.index[-1]:
+                        seg_end = df_PV_copy.index[-1]
+                        segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                        segments.append(segment_data)
+                        break
+
+        # if the starting factor is a peak
+        else:
+            seg_direction = 'down'
+
+            # check if a line just becomes a segment
+            segment_failed = False
+
+            # case when there are only two factors left, then it is the last "segment"
+            if len(df_PV_copy) == 2:
+                segment_failed = True
+                seg_end = df_PV_copy.index[1]
+            elif len(df_PV_copy) == 3:
+                segment_failed = True
+                if df_PV_copy.iloc[2]['High'] > df_PV_copy.iloc[0]['High']:
+                    seg_end = df_PV_copy.index[2]
+                else:
+                    seg_end = df_PV_copy.index[1]
+
+            if segment_failed:
+                segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                segments.append(segment_data)
+            # otherwise, a minimum segment can be found for at least two consecutive valleys
+            else:
+                # decreasing trend
+                for i in range(3, len(df_PV_copy)):
+
+                    # case when the segment hits a first peak that breaks the monotonous decreasing trend
+                    if df_PV_copy.iloc[i]['pv_type'] == 'Peak':
+                        if df_PV_copy.iloc[i]['High'] > df_PV_copy.iloc[i-2]['High']:
+                            seg_end = df_PV_copy.index[i-1]
+                            segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                            segments.append(segment_data)
+                            break
+                    # case when the segment hits a first valley that breaks the monotonous decreasing trend
+                    else:
+                        if df_PV_copy.iloc[i]['Low'] > df_PV_copy.iloc[i-2]['Low']:
+                            seg_end = df_PV_copy.index[i-2]
+                            segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                            segments.append(segment_data)
+                            break
+
+                    # case when it is the end of the df_PV_copy
+                    if df_PV_copy.index[i] == df_PV.index[-1]:
+                        seg_end = df_PV_copy.index[-1]
+                        segment_data = {'idx_start': seg_start, 'idx_end': seg_end, 'direction': seg_direction}
+                        segments.append(segment_data)
+                        break
+
+
+        # update the df_PV_copy
+        debug_logging(f'Processed segment: {seg_start} to {seg_end}')
+        df_PV_copy = df_PV_copy.loc[seg_end:]
+
+    # Create df_segments from the segments list
+    df_segments = pd.DataFrame(segments)
+
+    # Create a subset of df_PV that only contains the segment indexes
+    index_to_keep_start = df_segments['idx_start'].tolist()
+    index_to_keep_end = df_segments['idx_end'].tolist()
+    index_to_keep = list(set(index_to_keep_start + index_to_keep_end))
+    df_PV_segments = df_PV.loc[index_to_keep]
+    df_PV_segments.sort_values(by=['Idx'], inplace=True)
+
+    if df_PV_segments['pv_type'].iloc[-1] == df_PV_segments['pv_type'].iloc[-2]:
+        # drop the last one - bandaid solution
+        df_PV_segments = df_PV_segments.iloc[:-1]
+
+    assert (df_PV_segments['pv_type'] != df_PV_segments['pv_type'].shift(1)).all()
+
+    # refine the PVs
+    df_PV_segments = refine_peaks_valleys(df_PV_segments, df_HL, debug_plot=False)
+
+    # --- Visualization
+    if debug_plot:
+        debug_plot_segments(df_PV, df_HL, df_segments)
+        debug_plot_peak_valley_factors(df_PV_segments, df_HL)
+
+    return df_segments, df_PV_segments
+
+def find_hubs(df_PV_segments, df_HL, df_OHLC, debug_plot=DEBUG_PLOT):
+
+    # Simplify the df_PV_segments to only contain essential values
+    df_PV_segments_orig = df_PV_segments.copy()
+    df_PV_segments['factor_value'] = np.where(df_PV_segments['pv_type'] == 'Peak',
+                                              df_PV_segments['High'],
+                                              df_PV_segments['Low'])
+    df_PV_segments['factor_value'] = df_PV_segments['factor_value'].astype(float)
+    df_PV_segments.drop(['High', 'Low', 'is_peak', 'is_valley', 'pv_high', 'pv_low', 'direction'], axis=1, inplace=True)
+
+    # Create a list to store the hubs
+    list_hubs = []
+
+    # Define a function to check if two line segments overlap
+    def check_new_hub_formation(factor_0_type, factor_0, factor_1, factor_2, factor_3):
+        hub_high = None
+        hub_low = None
+        is_new_hub = False
+        if factor_0_type == 'Valley':   ## for a down hub
+            is_new_hub = max(factor_0, factor_2) < min(factor_1, factor_3)
+            if is_new_hub:
+                hub_high = min(factor_1, factor_3)
+                hub_low = max(factor_0, factor_2)
+        elif factor_0_type == 'Peak':  ## for a up hub
+            is_new_hub = min(factor_0, factor_2) > max(factor_1, factor_3)
+            if is_new_hub:
+                hub_high = min(factor_0, factor_2)
+                hub_low = max(factor_1, factor_3)
+        return is_new_hub, hub_high, hub_low
+
+    def check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
+        if factor_cur_type == 'Valley':
+            if factor_cur_value > cur_hub['high']:
+                return False
+            else:
+                return True
+        elif factor_cur_type == 'Peak':
+            if factor_cur_value < cur_hub['low']:
+                return False
+            else:
+                return True
+
+    # initialize state variables
+    last_included_factor_idx = -1
+    in_hub = False
+
+    for i in range(1, len(df_PV_segments) - 3):
+
+        debug_logging('Processing factor: ' + str(i))
+        if i < last_included_factor_idx:
+            # Skip this iteration if it's part of an already processed hub
+            continue
+
+        # Get the current factor and the next three factors
+        factor_0 = df_PV_segments.iloc[i]['factor_value']
+        factor_1 = df_PV_segments.iloc[i + 1]['factor_value']
+        factor_2 = df_PV_segments.iloc[i + 2]['factor_value']
+        factor_3 = df_PV_segments.iloc[i + 3]['factor_value']
+        factor_0_idx = df_PV_segments.index[i]
+        factor_1_idx = df_PV_segments.index[i + 1]
+        factor_2_idx = df_PV_segments.index[i + 2]
+        factor_3_idx = df_PV_segments.index[i + 3]
+        factor_0_type = df_PV_segments.iloc[i]['pv_type']
+
+        # Case 1 - if not in a hub, then check if a new hub is formed
+        if not in_hub:
+
+            # Determine if the first three lines (current and next two factors) form a hub
+            is_new_hub, hub_high, hub_low = check_new_hub_formation(factor_0_type, factor_0, factor_1, factor_2, factor_3)
+
+            # if no new hub can be formed, continue to the next iteration
+            if not is_new_hub:
+                continue  # Skip to next iteration if not a hub
+            # otherwise, define the new hub
+            else:
+                # If a new hub is formed, then set the state variables
+                in_hub = True
+                cur_hub = {'start_idx': factor_0_idx,
+                           'end_idx': factor_3_idx,
+                           'all_idx': [factor_0_idx, factor_1_idx, factor_2_idx, factor_3_idx],
+                           'num_segments': 3,
+                           'direction': 'down' if factor_0_type == 'Valley' else 'up',
+                           'high': hub_high,
+                           'low': hub_low}
+                # debug_logging(f'New hub formed from {factor_0_idx} to {factor_3_idx} with high {hub_high} and low {hub_low}')
+
+                # continue to check if the next few factors belong to this hub
+                for j in range(i + 4, len(df_PV_segments)):
+                    factor_cur_value = df_PV_segments.iloc[j]['factor_value']
+                    factor_cur_idx = df_PV_segments.index[j]
+                    factor_cur_type = df_PV_segments.iloc[j]['pv_type']
+
+                    # if the current factor belongs to the current hub, then update the hub
+                    if check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
+                        cur_hub['end_idx'] = factor_cur_idx
+                        cur_hub['num_segments'] += 1
+                        cur_hub['all_idx'].append(factor_cur_idx)
+                        # debug_logging(f'Extended hub end to {factor_cur_idx}')
+                    else:
+                        # hub breaks
+                        in_hub = False
+                        list_hubs.append(cur_hub)
+                        last_included_factor_idx = j - 1
+                        # debug_logging(f'Hub breaks at {factor_cur_idx}')
+                        break
+
+                    # case if it is the last factor
+                    if j == len(df_PV_segments) - 1:
+                        in_hub = False
+                        list_hubs.append(cur_hub)
+                        last_included_factor_idx = j
+                        # debug_logging(f'Hub breaks at {factor_cur_idx}')
+                        break
+
+    debug_logging(list_hubs)
+    df_hubs = pd.DataFrame(list_hubs)
+
+    # --- Visualization
+    # if debug_plot:
+        # debug_plot_hubs_using_HL(df_PV_segments, df_HL, df_hubs)
+        # debug_plot_hubs_using_OHLC(df_PV_segments, df_OHLC, df_hubs)
+    fig_hubs = debug_plot_hubs(df_PV_segments, df_HL, df_OHLC, df_hubs)
+
+    return df_hubs, fig_hubs
+
+def pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC, debug_plot=DEBUG_PLOT):
+    """ This function identifies the pullback trading setup for trending hubs"""
+
+    # Extract the last two hubs
+    if len(df_hubs) < 2:
+        return 0, 'No valid setup'
+    else:
+        hub_cur = df_hubs.iloc[-1]
+        hub_prev = df_hubs.iloc[-2]
+
+    # current price
+    cur_price = df_OHLC.iloc[-1]['Close']
+
+    # --- Check the relation between the two hubs
+    # Case 1 - the last hub is higher than the previous hub (up trend)
+    msg = 'No valid setup'
+    if hub_cur['low'] > hub_prev['high']:  # up trending hubs
+        if cur_price < hub_cur['high']:   # loose condition, if price lower than the current high, OK
+            msg = 'Pullback long setup'
+            return 1, msg  # pullback long setup
+        else:
+            return 0, msg  # no valid setup
+    # Case 2 - the last hub is lower than the previous one (down trend)
+    elif hub_cur['high'] < hub_prev['low']:  # down trending hubs
+        if cur_price > hub_cur['low']:  # loose condition, if price higher than the current low, OK
+            msg = 'Pullback short setup'
+            return -1, msg  # pullback short setup
+        else:
+            return 0, msg  # no valid setup
+
+def pattern_setup_RSI_extreme(df_OHLC,
+                              thres_overbought=65,
+                              thres_oversold=35,
+                              duration_overbought=6,
+                              duration_oversold=6,
+                              debug_plot=DEBUG_PLOT):
+    import talib
+
+    # Ensure df_OHLC is a standalone DataFrame
+    df_OHLC = df_OHLC.copy()
+
+    # Calculate RSI
+    df_OHLC.loc[:, 'RSI'] = talib.RSI(df_OHLC['Close'], timeperiod=14)
+
+    # label the RSI values that are overbought or oversold
+    df_OHLC.loc[:, 'RSI_overbought'] = 0
+    df_OHLC.loc[:, 'RSI_oversold'] = 0
+    df_OHLC.loc[df_OHLC['RSI'] > thres_overbought, 'RSI_overbought'] = 1
+    df_OHLC.loc[df_OHLC['RSI'] < thres_oversold, 'RSI_oversold'] = 1
+
+    # Propagate the RSI values
+    def propagate_values(df, len_prop):
+        df.columns = ['value']
+        i = 0
+        while i < len(df):
+            if df.iloc[i]['value'] != 0:
+                value = df.iloc[i]['value']
+                j = 1
+                while j < len_prop + 1 and i + j < len(df) and df.iloc[i + j]['value'] == 0:
+                    df.at[df.index[i + j], 'value'] = value
+                    j += 1
+                i += j
+            else:
+                i += 1
+        return df['value']
+
+    df_OHLC.loc[:, 'RSI_overbought_propagated'] = propagate_values(df_OHLC[['RSI_overbought']], duration_overbought)
+    df_OHLC.loc[:, 'RSI_oversold_propagated'] = propagate_values(df_OHLC[['RSI_oversold']], duration_oversold)
+
+    # --- Check if RSI is at an extreme
+    if df_OHLC.iloc[-1]['RSI_oversold_propagated'] == 1:
+        msg = 'RSI oversold long setup'
+        return 1, msg  # long setup
+    elif df_OHLC.iloc[-1]['RSI_overbought_propagated'] == 1:
+        msg = 'RSI overbought long setup'
+        return -1, msg  # short setup
+    else:
+        msg = 'No valid RSI overbought/sold setup'
+        return 0, msg  # no valid setup
+
+def convert_df_to_bars(df_OHLC, time_scale, name_symbol):
+
+    # Create a list to store the bars
+    bars_raw = []
+
+    # remove index
+    df_OHLC.reset_index(inplace=True)
+
+    # convert dataframe to raw bar elements
+    for i, row in df_OHLC.iterrows():
+        bar = RawBar(symbol=name_symbol,
+                     id=i,
+                     dt=row['Date'],
+                     freq=time_scale,
+                     open=row['Open'],
+                     close=row['Close'],
+                     high=row['High'],
+                     low=row['Low'],
+                     vol=row['Volume'])
+        bars_raw.append(bar)
+    # print(f'Converted DataFrame to {len(bars_raw)} bars')
+
+    return bars_raw
+
+def remove_include(k1: NewBar, k2: NewBar, k3: RawBar):
+    """去除包含关系：输入三根k线，其中k1和k2为没有包含关系的K线，k3为原始K线
+
+    处理逻辑如下：
+
+    1. 首先，通过比较k1和k2的高点(high)的大小关系来确定direction的值。如果k1的高点小于k2的高点，
+       则设定direction为Up；如果k1的高点大于k2的高点，则设定direction为Down；如果k1和k2的高点相等，
+       则创建一个新的K线k4，与k3具有相同的属性，并返回False和k4。
+
+    2. 接下来，判断k2和k3之间是否存在包含关系。如果存在，则根据direction的值进行处理。
+        - 如果direction为Up，则选择k2和k3中的较大高点作为新K线k4的高点，较大低点作为低点，较大高点所在的时间戳(dt)作为k4的时间戳。
+        - 如果direction为Down，则选择k2和k3中的较小高点作为新K线k4的高点，较小低点作为低点，较小低点所在的时间戳(dt)作为k4的时间戳。
+        - 如果direction的值不是Up也不是Down，则抛出ValueError异常。
+
+    3. 根据上述处理得到的高点、低点、开盘价(open_)、收盘价(close)，计算新K线k4的成交量(vol)和成交金额(amount)，
+       并将k2中除了与k3时间戳相同的元素之外的其他元素与k3一起作为k4的元素列表(elements)。
+
+    4. 返回一个布尔值和新的K线k4。如果k2和k3之间存在包含关系，则返回True和k4；否则返回False和k4，其中k4与k3具有相同的属性。
+    """
+    if k1.high < k2.high:
+        direction = Direction.Up
+    elif k1.high > k2.high:
+        direction = Direction.Down
+    else:
+        k4 = NewBar(symbol=k3.symbol, id=k3.id, freq=k3.freq, dt=k3.dt, open=k3.open,
+                    close=k3.close, high=k3.high, low=k3.low, vol=k3.vol, amount=k3.amount, elements=[k3])
+        return False, k4
+
+    # 判断 k2 和 k3 之间是否存在包含关系，有则处理
+    if (k2.high <= k3.high and k2.low >= k3.low) or (k2.high >= k3.high and k2.low <= k3.low):
+        if direction == Direction.Up:
+            high = max(k2.high, k3.high)
+            low = max(k2.low, k3.low)
+            dt = k2.dt if k2.high > k3.high else k3.dt
+        elif direction == Direction.Down:
+            high = min(k2.high, k3.high)
+            low = min(k2.low, k3.low)
+            dt = k2.dt if k2.low < k3.low else k3.dt
+        else:
+            raise ValueError
+
+        open_, close = (high, low) if k3.open > k3.close else (low, high)
+        vol = k2.vol + k3.vol
+        amount = k2.amount + k3.amount
+        # 这里有一个隐藏Bug，len(k2.elements) 在一些及其特殊的场景下会有超大的数量，具体问题还没找到；
+        # 临时解决方案是直接限定len(k2.elements)<=100
+        elements = [x for x in k2.elements[:100] if x.dt != k3.dt] + [k3]
+        k4 = NewBar(symbol=k3.symbol, id=k2.id, freq=k2.freq, dt=dt, open=open_,
+                    close=close, high=high, low=low, vol=vol, amount=amount, elements=elements)
+        return True, k4
+    else:
+        k4 = NewBar(symbol=k3.symbol, id=k3.id, freq=k3.freq, dt=k3.dt, open=k3.open,
+                    close=k3.close, high=k3.high, low=k3.low, vol=k3.vol, amount=k3.amount, elements=[k3])
+        return False, k4
+
+
+
+class ChanAnalysis:
+    def __init__(self,
+                 bars: List[RawBar],
+                 # get_signals = None,
+                 # max_bi_num=envs.get_max_bi_num(),
+                 ):
+
+        """
+        :param bars: K线数据
+        :param max_bi_num: 最大允许保留的笔数量
+        :param get_signals: 自定义的信号计算函数
+        """
+
+        # self.verbose = envs.get_verbose()
+        # self.max_bi_num = max_bi_num
+
+        self.bars_raw: List[RawBar] = []  # 原始K线序列
+        self.bars_ubi: List[NewBar] = []  # 未完成笔的无包含K线序列
+        self.bi_list: List[BI] = []
+
+        # self.freq = bars[0].freq
+        # self.get_signals = get_signals
+        # self.signals = None
+        # cache 是信号计算过程的缓存容器，需要信号计算函数自行维护
+        # self.cache = OrderedDict()
+
+        # update analysis
+        for bar in bars:
+            self.update(bar)
+
+        ### update the analysis
+
+
+    def update(self, bar: RawBar):
+        """更新分析结果
+
+       :param bar: 单根K线对象
+       """
+        # 更新K线序列
+        if not self.bars_raw or bar.dt != self.bars_raw[-1].dt:
+            self.bars_raw.append(bar)
+            last_bars = [bar]
+        else:
+            # 当前 bar 是上一根 bar 的时间延伸
+            self.bars_raw[-1] = bar
+            last_bars = self.bars_ubi.pop(-1).raw_bars
+            assert bar.dt == last_bars[-1].dt
+            last_bars[-1] = bar
+
+        # 去除包含关系
+        bars_ubi = self.bars_ubi
+        for bar in last_bars:
+            if len(bars_ubi) < 2:
+                bars_ubi.append(NewBar(symbol=bar.symbol, id=bar.id, freq=bar.freq, dt=bar.dt,
+                                       open=bar.open, close=bar.close, amount=bar.amount,
+                                       high=bar.high, low=bar.low, vol=bar.vol, elements=[bar]))
+            else:
+                k1, k2 = bars_ubi[-2:]
+                has_include, k3 = remove_include(k1, k2, bar)
+                if has_include:
+                    bars_ubi[-1] = k3
+                else:
+                    bars_ubi.append(k3)
+        self.bars_ubi = bars_ubi
+
+        # 更新笔
+        self.__update_bi()
+
+        # 根据最大笔数量限制完成 bi_list, bars_raw 序列的数量控制
+        self.bi_list = self.bi_list[-self.max_bi_num:]
+        if self.bi_list:
+            sdt = self.bi_list[0].fx_a.elements[0].dt
+            s_index = 0
+            for i, bar in enumerate(self.bars_raw):
+                if bar.dt >= sdt:
+                    s_index = i
+                    break
+            self.bars_raw = self.bars_raw[s_index:]
+
+        # 如果有信号计算函数，则进行信号计算
+        # self.signals = self.get_signals(c=self) if self.get_signals else OrderedDict()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def main(df_OHLC_mid,
+         name_symbol='BTCUSDT',
+         time_frame='12h',
+         num_candles=500,
+         debug_plot=False,
+         use_high_low=False):
+
+    # convert DataFrame to bars
+    bars = convert_df_to_bars(df_OHLC_mid, time_frame, name_symbol)
+
+    # initilize the ChanAnalysis object
+    chan_analysis = ChanAnalysis(bars)
+
+
+
+
+
+    # def run(self):
+    #     # Step 1 - Apply containing patterns
+    #     self.df_HL = apply_containing_pattern(self.df_OHLC, use_high_low=False, debug_plot=self.debug_plot)
+    #
+    #     # Step 2 - Extract line/segment peak/valleys
+    #     self.df_PV_raw = find_raw_peaks_valleys(self.df_HL, debug_plot=self.debug_plot)
+    #     _, self.df_PV_segments = find_segments(self.df_PV_raw, self.df_HL, debug_plot=self.debug_plot)
+    #
+    #     # Step 3 - Identify hubs
+    #     self.df_hubs, self.fig_hubs = find_hubs(self.df_PV_segments, self.df_HL, self.df_OHLC, debug_plot=self.debug_plot)
+    #
+    #     # Step 4 - Identify trading setup
+    #     self.setup_decision_1, self.msg_1 = pattern_setup_trending_hubs_pull_back(self.df_hubs, self.df_OHLC, debug_plot=True)
+    #     debug_logging(f'Setup decision 1: {self.setup_decision_1}, {self.msg_1}')
+    #
+    #     # if require_RSI_extreme:
+    #     #     self.setup_decision_2, self.msg_2 = pattern_setup_RSI_extreme(self.df_OHLC, debug_plot=True)
+    #     #     debug_logging(f'Setup decision 2: {self.setup_decision_2}, {self.msg_2}')
+    #     # else:
+    #     #     self.setup_decision_2 = self.setup_decision_1
+    #     #     # msg_2 = 'No RSI extreme requirement'
+    #
+    #     # Final decision
+    #     # if self.setup_decision_1 == 1 and self.setup_decision_2 == 1:
+    #     #     self.final_decision = 1
+    #     # elif self.setup_decision_1 == -1 and self.setup_decision_2 == -1:
+    #     #     self.final_decision = -1
+    #     # else:
+    #     #     self.final_decision = 0
+    #
+    #     # make the final decision
+    #     self.final_decision = self.setup_decision_1
+    #
+    #     debug_logging(f'Final setup decision: {self.final
+
+
+
+# def main(df_OHLC_mid,
+#          num_candles=500,
+#          # require_RSI_extreme=False,
+#          debug_plot=False,
+#          use_high_low=False):
+#
+#     """ This mid-timeframe strategy is based on the Chan Theory and contains the following steps:
+#     # Updated on 2023-12-02
+#     Step 1. Process the OHLC data with containing patterns. (包含关系)
+#     Step 2. Find peaks and valleys (fractal tops and bottoms) (顶底分型以及线段)
+#     Step 3. Find central zones (hubs) (寻找中枢）
+#     Step 4. Identify the trading setup (根据中枢分布决定交易形态）
+#     Step 4.1. confirm at least two trending hubs (确认至少两个趋势中枢)
+#     Step 4.2. then trigger the setup when the price is below the edge of the current hub (e.g. < hub high for Long).
+#     """
+#
+#     # slice the DataFrame to the last 'num_candles' candles
+#     df_OHLC_mid = df_OHLC_mid.iloc[-num_candles:]
+#
+#     # Step 1 - Apply containing patterns
+#     df_HL = apply_containing_pattern(df_OHLC_mid, use_high_low=use_high_low, debug_plot=DEBUG_PLOT)
+#
+#     # Step 2 - Extract line/segment peak/valleys
+#     df_PV_raw = find_raw_peaks_valleys(df_HL, debug_plot=DEBUG_PLOT)
+#     _, df_PV_segments = find_segments(df_PV_raw, df_HL, debug_plot=DEBUG_PLOT)
+#
+#     # Step 3 - Identify hubs
+#     df_hubs, fig_hubs = find_hubs(df_PV_segments, df_HL, df_OHLC_mid, debug_plot=DEBUG_PLOT)
+#
+#     # Step 4 - Identify trading setup
+#     setup_decision_1, msg_1 = pattern_setup_trending_hubs_pull_back(df_hubs, df_OHLC_mid, debug_plot=True)
+#     debug_logging(f'Setup decision 1: {setup_decision_1}, {msg_1}')
+#
+#     # if require_RSI_extreme:
+#     #     setup_decision_2, msg_2 = pattern_setup_RSI_extreme(df_OHLC_mid, debug_plot=True)
+#     #     debug_logging(f'Setup decision 2: {setup_decision_2}, {msg_2}')
+#     # else:
+#     #     setup_decision_2 = setup_decision_1
+#     #     # msg_2 = 'No RSI extreme requirement'
+#
+#     # Final decision
+#     # if setup_decision_1 == 1 and setup_decision_2 == 1:
+#     #     final_decision = 1
+#     # elif setup_decision_1 == -1 and setup_decision_2 == -1:
+#     #     final_decision = -1
+#     # else:
+#     #     final_decision = 0
+#
+#     # make the final decision
+#     final_decision = setup_decision_1
+#
+#     debug_logging(f'Final setup decision: {final_decision}')
+#
+#     return final_decision, fig_hubs
+
