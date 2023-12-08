@@ -162,3 +162,5 @@ cython_debug/
 module_data/data_binance/
 /module_data/data_active/
 module_data/data_active/
+
+module_backtesting/
