@@ -505,10 +505,16 @@ class CZSC:
 
         # 生成笔中枢
         self.bi_hubs, self.bi_list, self.bi_points = generate_biHub(self.bi_hubs, self.bi_list, [])
+        print(f'number of bi hubs: {len(self.bi_hubs)}')
+
         for bi_hub in self.bi_hubs:
-            print(bi_hub.ZG, bi_hub.ZD, bi_hub.GG, bi_hub.DD)
-            for bi in bi_hub.elements:
-                print(bi.fx_a.dt, bi.fx_b.dt)
+            try:
+                print(bi_hub.ZG, bi_hub.ZD, bi_hub.entry.edt, bi_hub.leave.sdt)
+            except:
+                print('error')
+            # # print(bi_hub.ZG, bi_hub.ZD)
+            # for bi in bi_hub.elements:
+            #     print(bi.fx_a.dt, bi.fx_b.dt)
 
         # # 生成线段
         # self.line_list, self.bi_list = generate_line_by_bi(self.line_list, self.bi_list)
@@ -653,7 +659,6 @@ class CZSC:
     def to_plotly(self):
         """使用 plotly 绘制K线分析图"""
         import pandas as pd
-        # from czsc.utils.plotly_plot import KlineChart
 
         bi_list = self.bi_list
         df = pd.DataFrame(self.bars_raw)
@@ -671,6 +676,31 @@ class CZSC:
             fx = pd.DataFrame([{'dt': x.dt, "fx": x.fx} for x in self.fx_list])
             # kline.add_scatter_indicator(fx['dt'], fx['fx'], name="分型", row=1, line_width=1)
             kline.add_scatter_indicator(bi['dt'], bi['bi'], name="笔", text=bi['text'], row=1, line_width=2)
+
+        # Check if there are already shapes in the figure and keep them
+        existing_shapes = list(kline.fig.layout.shapes) if kline.fig.layout.shapes is not None else []
+
+        # Loop through each bi_hub and add rectangles
+        for bi_hub in self.bi_hubs:
+            try:
+                rect = go.layout.Shape(
+                    type="rect",
+                    x0=bi_hub.entry.sdt, x1=bi_hub.leave.sdt,
+                    y0=bi_hub.ZG, y1=bi_hub.ZD,
+                    line=dict(width=2),
+                    fillcolor="LightSkyBlue",
+                    opacity=0.5,
+                    layer="below"  # Ensures the shape is below the data points
+                )
+                existing_shapes.append(rect)
+            except AttributeError:
+                # Skip if any of the required attributes are missing
+                continue
+
+        # Update the figure with the new shapes
+        kline.fig.update_layout(shapes=existing_shapes)
+
+
         return kline.fig
 
     def open_in_browser(self, width: str = "1400px", height: str = '580px'):

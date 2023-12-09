@@ -195,9 +195,9 @@ def kline_pro(kline: List[dict],
               bi: List[dict] = None,
               xd: List[dict] = None,
               bs: List[dict] = None,
-              title: str = "缠中说禅K线分析",
+              title: str = "缠论K线分析",
               width: str = "1400px",
-              height: str = '580px') -> Grid:
+              height: str = '900px') -> Grid:
     """绘制缠中说禅K线分析结果
 
     :param kline: K线
