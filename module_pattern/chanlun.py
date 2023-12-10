@@ -424,8 +424,10 @@ def check_bi(bars: List[NewBar], benchmark=None):
 class CZSC:
     def __init__(self,
                  bars: List[RawBar],
-                 get_signals=None,
+                 symbol: 'str',
+                 freq: 'str',
                  max_bi_num=100,
+
                  ):
         """
 
@@ -433,21 +435,23 @@ class CZSC:
         :param max_bi_num: 最大允许保留的笔数量
         :param get_signals: 自定义的信号计算函数
         """
-        self.verbose = True
+        # self.verbose = True
         self.max_bi_num = max_bi_num
         self.bars_raw: List[RawBar] = []  # 原始K线序列
         self.bars_ubi: List[NewBar] = []  # 未完成笔的无包含K线序列
         self.bi_list: List[BI] = []
-        # self.fx_list: List[FX] = []
-        self.line_list: List[Line] = []
         self.bi_hubs: List[BiHub] = []
-        self.line_hubs: List[LineHub] = []
-        self.symbol = bars[0].symbol
-        self.freq = bars[0].freq
-        self.signals = None
-        self.chart = None
-        # cache 是信号计算过程的缓存容器，需要信号计算函数自行维护
-        self.cache = OrderedDict()
+        self.symbol = symbol
+        self.freq = freq
+        # self.signals = None
+        # self.chart = None
+
+        # self.fx_list: List[FX] = []
+        # self.line_list: List[Line] = []
+        # self.line_hubs: List[LineHub] = []
+
+        # # cache 是信号计算过程的缓存容器，需要信号计算函数自行维护
+        # self.cache = OrderedDict()
 
         # 完成笔的处理
         for bar in bars:
@@ -457,21 +461,21 @@ class CZSC:
         bi_list = self.bi_list.copy()
         df_bi = convert_bi_list_to_df(bi_list)
 
-        # TODO - need to improve hub detection calculation robustness
-        # calculate hubs
+        # calculate bi hubs 笔中枢的处理
         df_hubs = find_hubs(df_bi)
         self.df_bi_hubs = df_hubs
 
-        # calculate the pullback setup
+        # identify trading pattern
         cur_price = bars[-1].close
-        setup, msg = pattern_setup_trending_hubs_pull_back(df_hubs, cur_price)
+        decision, msg = pattern_setup_trending_hubs_pull_back(df_hubs, cur_price)
+        self.decision = decision
+        self.msg = msg
 
-        # plot using to_echarts
-        self.chart = self.to_echarts()
-        self.chart = self.to_plotly()
-        self.chart.show()
+        # # plot using to_echarts
+        # self.chart = self.to_echarts()
+        # self.chart = self.to_plotly()
+        # self.chart.show()
 
-        print('Done!')
 
     def __repr__(self):
         return "<CZSC~{}~{}>".format(self.symbol, self.freq.value)
@@ -502,8 +506,8 @@ class CZSC:
             self.bars_ubi = bars_ubi_
             return
 
-        if self.verbose and len(bars_ubi) > 100:
-            print(f"{self.symbol} - {self.freq} - {bars_ubi[-1].dt} 未完成笔延伸数量: {len(bars_ubi)}")
+        # if self.verbose and len(bars_ubi) > 100:
+        #     print(f"{self.symbol} - {self.freq} - {bars_ubi[-1].dt} 未完成笔延伸数量: {len(bars_ubi)}")
 
         # if envs.get_bi_change_th() > 0.5 and len(self.bi_list) >= 5:
         #     price_seq = [x.power_price for x in self.bi_list[-5:]]
@@ -743,265 +747,14 @@ def main(df_OHLC_mid,
     bars = convert_df_to_bars(df_OHLC_mid, time_frame, name_symbol)
 
     # initilize the ChanAnalysis object
-    chan_analysis = CZSC(bars)
+    chanlun = CZSC(bars,
+                   symbol=name_symbol,
+                   freq=time_frame,
+                   )
 
+    # plot using to_echarts
+    chanlun.chart = chanlun.to_echarts()
+    chanlun.chart = chanlun.to_plotly()
+    # chanlun.chart.show()
 
-
-# def generate_line_by_bi(line_list: List[Line], bi_list: List[BI]):
-#     """根据笔列表生成线段，每次生成一根线段
-#
-#     :param line_list: 线段列表
-#     :param bi_list: 笔列表
-#     :return: line_list, bi_list: 更新后的线段列表和笔列表
-#     """
-#     # 如果没有初始线段
-#     if len(line_list) == 0:
-#         for i in range(1, len(bi_list) - 1):
-#             bi1 = bi_list[i - 1]
-#             bi2 = bi_list[i]
-#             bi3 = bi_list[i + 1]
-#             if bi2.power < bi1.power + bi3.power:
-#                 high = max(bi1.high, bi3.high)
-#                 low = min(bi1.low, bi3.low)
-#                 line_list.append(
-#                     Line(symbol=bi1.symbol, freq=bi1.freq, id=-1, direction=bi1.direction, start_dt=bi1.fx_a.dt,
-#                          end_dt=bi3.fx_b.dt, high=high, low=low, power=round(abs(high - low), 2)))
-#                 bi_list = [x for x in bi_list if x.fx_a.dt > bi3.fx_a.dt]
-#                 break
-#
-#     if len(line_list) == 0:
-#         return line_list, bi_list
-#
-#     # 进行线段的延伸
-#     last_line = line_list[-1]
-#     for bi in bi_list[1::2]:
-#         if (bi.direction == 'up' and bi.high > last_line.high) or (bi.direction == 'down' and bi.low < last_line.low):
-#             # 延伸last_line
-#             last_line.end_dt = bi.fx_b.dt
-#             if bi.direction == 'up':
-#                 last_line.high = bi.high
-#             if bi.direction == 'down':
-#                 last_line.low = bi.low
-#     bi_list = [x for x in bi_list if x.fx_a.dt >= last_line.end_dt]
-#
-#     new_line, bi_list = check_line_by_bi(bi_list)
-#     if new_line is not None:
-#         line_list.append(new_line)
-#
-#     return line_list, bi_list
-#
-# def check_line_by_bi(bi_list: List[BI]):
-#     """输入一串笔序列，查找其中的一根线段"""
-#     if not bi_list or len(bi_list) < 3:
-#         return None, bi_list
-#
-#     bi0 = bi_list[0]
-#     new_line = None
-#     for cur in bi_list[::2]:
-#         if (cur.direction == 'up' and cur.high > bi0.high) or (cur.direction == 'down' and cur.low < bi0.low):
-#             high = max(bi0.high, cur.high)
-#             low = min(bi0.low, cur.low)
-#             new_line = Line(symbol=cur.symbol, freq=cur.freq, id=-1, direction=bi0.direction, start_dt=bi0.fx_a.dt,
-#                             end_dt=cur.fx_b.dt, high=high, low=low, power=round(abs(high - low), 2))
-#             bi_list = [x for x in bi_list if x.fx_a.dt >= new_line.end_dt]
-#             break
-#
-#     return new_line, bi_list
-#
-# def generate_biHub(hubs: List[BiHub], bi_list: List[BI], point_list: List[Point]):
-#     """根据笔列表生成中枢，每次生成一个中枢
-#
-#     :param hubs: 中枢列表
-#     :param bi_list: 笔列表
-#     :return: hubs, bi_list: 更新后的中枢列表和笔列表
-#     """
-#     if len(bi_list) < 3:
-#         return hubs, bi_list, point_list
-#
-#     # 获取上一个中枢或者第一个中枢
-#     if not hubs or len(hubs) < 1:
-#         last_hub, bi_list = check_biHub(bi_list, None)
-#         if last_hub:
-#             hubs.append(last_hub)
-#     else:
-#         last_hub = hubs[-1]
-#
-#     if not last_hub:
-#         return hubs, bi_list, point_list
-#
-#     # 上一个中枢延伸
-#     pos = 0
-#     while pos < len(bi_list):
-#         if not last_hub.leave:
-#             last_hub.leave = bi_list[pos]
-#         if last_hub.leave.fx_a.dt == bi_list[pos].fx_a.dt:
-#             pos += 1
-#             continue
-#         if last_hub.ZD > bi_list[pos].high or last_hub.ZG < bi_list[pos].low:
-#             if last_hub.ZD > bi_list[pos].high:
-#                 # 中枢结束，形成三卖
-#                 fx = bi_list[pos].fx_b if bi_list[pos].direction == 'up' else bi_list[pos].fx_a
-#                 if len(point_list) == 0 or (len(point_list) > 0 and point_list[-1].dt < fx.dt):
-#                     point_list.append(
-#                         Point(id=-1, symbol=fx.symbol, freq=fx.freq, dt=fx.dt, type='S3',
-#                               high=fx.elements[1].high, low=fx.elements[1].low))
-#             elif last_hub.ZG < bi_list[pos].low:
-#                 # 中枢结束，形成三买
-#                 fx = bi_list[pos].fx_b if bi_list[pos].direction == 'down' else bi_list[pos].fx_a
-#                 if len(point_list) == 0 or (len(point_list) > 0 and point_list[-1].dt < fx.dt):
-#                     point_list.append(
-#                         Point(id=-1, symbol=fx.symbol, freq=fx.freq, dt=fx.dt, type='B3',
-#                               high=fx.elements[1].high, low=fx.elements[1].low))
-#             break
-#         last_hub.elements.append(bi_list[pos])
-#         last_hub.GG = max([x.high for x in last_hub.elements])
-#         last_hub.DD = min([x.low for x in last_hub.elements])
-#         last_hub.leave = bi_list[pos + 1] if pos < len(bi_list) - 1 else None
-#         pos += 2
-#
-#     # 计算当前中枢
-#     cur_hub, bi_list = check_biHub([x for x in bi_list if x.fx_a.dt >= last_hub.elements[-1].fx_b.dt], last_hub)
-#     if cur_hub and not cur_hub.entry:
-#         cur_hub.entry = last_hub.leave
-#
-#     if cur_hub:
-#         hubs.append(cur_hub)
-#
-#     return hubs, bi_list, point_list
-#
-# def check_biHub(bi_list: List[BI], last_hub):
-#     """输入一串笔，查找其中的第一个中枢
-#
-#     :param last_hub:
-#     :param bi_list: 笔列表
-#     :return: hub, bi_list: 查找到的中枢，和更新后的笔列表
-#     """
-#     start_idx = -1
-#     for i in range(len(bi_list) - 3):
-#         bi1 = bi_list[i]
-#         bi3 = bi_list[i + 2]
-#         zg = min(bi1.high, bi3.high)
-#         zd = max(bi1.low, bi3.low)
-#         if zg > zd:
-#             # 检验中枢方向是否正确
-#             if last_hub is not None:
-#                 if (bi1.direction == 'down' and zg < last_hub.ZG) or (bi1.direction == 'up' and zd > last_hub.ZD):
-#                     continue
-#             # 记录中枢开始位置
-#             start_idx = i
-#             break
-#     if start_idx < 0:
-#         return None, bi_list
-#
-#     bi1 = bi_list[start_idx]
-#     bi3 = bi_list[start_idx + 2]
-#     entry = None if start_idx == 0 else bi_list[start_idx - 1]
-#     if entry is None and last_hub is not None:
-#         entry = last_hub.elements[-1]
-#     leave = None if start_idx >= len(bi_list) - 3 else bi_list[start_idx + 3]
-#
-#     hub = BiHub(id=-1, symbol=bi1.symbol, freq=bi1.freq, ZG=min(bi1.high, bi3.high), ZD=max(bi1.low, bi3.low),
-#               GG=max(bi1.high, bi3.high), DD=min(bi1.low, bi3.low), entry=entry, leave=leave, elements=[bi1, bi3])
-#
-#     bi_list = [x for x in bi_list if x.fx_a.dt >= hub.elements[-1].fx_b.dt]
-#
-#     return hub, bi_list
-#
-# def generate_lineHub(hubs: List[LineHub], line_list: List[Line], point_list: List[Point]):
-#     """根据线段列表生成中枢，每次生成一个中枢
-#
-#     :param hubs: 中枢列表
-#     :param line_list: 笔列表
-#     :return: hubs, line_list: 更新后的中枢列表和笔列表
-#     """
-#     if len(line_list) < 3:
-#         return hubs, line_list, point_list
-#
-#     # 获取上一个中枢或者第一个中枢
-#     if not hubs or len(hubs) < 1:
-#         last_hub, line_list = check_lineHub(line_list, None)
-#         if last_hub:
-#             hubs.append(last_hub)
-#     else:
-#         last_hub = hubs[-1]
-#
-#     if not last_hub:
-#         return hubs, line_list, point_list
-#
-#     # 上一个中枢延伸
-#     pos = 0
-#     while pos < len(line_list):
-#         if not last_hub.leave:
-#             last_hub.leave = line_list[pos]
-#         if last_hub.leave.start_dt == line_list[pos].start_dt:
-#             pos += 1
-#             continue
-#         if last_hub.ZD > line_list[pos].high or last_hub.ZG < line_list[pos].low:
-#             if last_hub.ZD > line_list[pos].high:
-#                 # 中枢结束，形成三卖
-#                 dt = line_list[pos].end_dt if line_list[pos].direction == 'up' else line_list[pos].start_dt
-#                 if len(point_list) == 0 or (len(point_list) > 0 and point_list[-1].dt < dt):
-#                     point_list.append(
-#                         Point(id=-1, symbol=last_hub.symbol, freq=last_hub.freq, dt=dt, type='S3',
-#                               high=line_list[pos].high, low=line_list[pos].high))
-#             elif last_hub.ZG < line_list[pos].low:
-#                 # 中枢结束，形成三买
-#                 dt = line_list[pos].end_dt if line_list[pos].direction == 'down' else line_list[pos].start_dt
-#                 if len(point_list) == 0 or (len(point_list) > 0 and point_list[-1].dt < dt):
-#                     point_list.append(
-#                         Point(id=-1, symbol=last_hub.symbol, freq=last_hub.freq, dt=dt, type='B3',
-#                               high=line_list[pos].low, low=line_list[pos].low))
-#             break
-#         last_hub.elements.append(line_list[pos])
-#         last_hub.GG = max([x.high for x in last_hub.elements])
-#         last_hub.DD = min([x.low for x in last_hub.elements])
-#         last_hub.leave = line_list[pos + 1] if pos < len(line_list) - 1 else None
-#         pos += 2
-#
-#     # 计算当前中枢
-#     cur_hub, line_list = check_lineHub([x for x in line_list if x.start_dt >= last_hub.elements[-1].end_dt], last_hub)
-#     if cur_hub and not cur_hub.entry:
-#         cur_hub.entry = last_hub.leave
-#
-#     if cur_hub:
-#         hubs.append(cur_hub)
-#
-#     return hubs, line_list, point_list
-#
-# def check_lineHub(line_list: List[Line], last_hub):
-#     """输入一串线段，查找其中的第一个中枢
-#
-#     :param last_hub:
-#     :param line_list: 线段列表
-#     :return: hub, line_list: 查找到的中枢，和更新后的线段列表
-#     """
-#     start_idx = -1
-#     for i in range(len(line_list) - 3):
-#         bi1 = line_list[i]
-#         bi3 = line_list[i + 2]
-#         zg = min(bi1.high, bi3.high)
-#         zd = max(bi1.low, bi3.low)
-#         if zg > zd:
-#             # 检验中枢方向是否正确
-#             if last_hub is not None:
-#                 if (bi1.direction == 'down' and zg < last_hub.ZG) or (bi1.direction == 'up' and zd > last_hub.ZD):
-#                     continue
-#             # 记录中枢开始位置
-#             start_idx = i
-#             break
-#     if start_idx < 0:
-#         return None, line_list
-#
-#     bi1 = line_list[start_idx]
-#     bi3 = line_list[start_idx + 2]
-#     entry = None if start_idx == 0 else line_list[start_idx - 1]
-#     if entry is None and last_hub is not None:
-#         entry = last_hub.elements[-1]
-#     leave = None if start_idx >= len(line_list) - 3 else line_list[start_idx + 3]
-#
-#     hub = LineHub(id=-1, symbol=bi1.symbol, freq=bi1.freq, ZG=min(bi1.high, bi3.high), ZD=max(bi1.low, bi3.low),
-#               GG=max(bi1.high, bi3.high), DD=min(bi1.low, bi3.low), entry=entry, leave=leave, elements=[bi1, bi3])
-#
-#     line_list = [x for x in line_list if x.start_dt >= hub.elements[-1].end_dt]
-#
-#     return hub, line_list
+    return chanlun.decision, chanlun.chart

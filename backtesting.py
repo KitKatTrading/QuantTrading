@@ -81,7 +81,7 @@ class Backtesting:
         cooling_down_period = 12
         cooling_down_counter = 0
 
-        ### ------------ Process high timeframe data ------------ ###
+        ### DIRECTION MODULE
         # Load data
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_high + '.csv')
         df_OHLC_high = pd.read_csv(file_path, index_col=0)
@@ -92,30 +92,32 @@ class Backtesting:
         df_decision_direction_long = df_decision_direction.loc[df_decision_direction['decision'] == 1]
         df_decision_direction_short = df_decision_direction.loc[df_decision_direction['decision'] == -1]
 
-        ### ------------ Process mid timeframe data ------------ ###
+        ### PATTERN MODULE
         # Load data
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_mid + '.csv')
         df_OHLC_mid = pd.read_csv(file_path, index_col=0)
         df_OHLC_mid = df_OHLC_mid.loc[self.bt_start_date: self.bt_end_date]
 
-        ### ------------ Process low timeframe data ------------ ###
+        ### ENTRY MODULE
         # Load data
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_low + '.csv')
         df_OHLC_low = pd.read_csv(file_path, index_col=0)
         df_OHLC_low = df_OHLC_low.loc[self.bt_start_date: self.bt_end_date]
 
-        # Customize indicators
-        # Indicator #1: RSI and its EMA21
-        df_OHLC_low['RSI'] = talib.RSI(df_OHLC_low['Close'], timeperiod=14)
-        df_OHLC_low['RSI_EMA6'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=6)
-        df_OHLC_low['RSI_EMA12'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=12)
-        df_OHLC_low['RSI_EMA24'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=24)
-        df_OHLC_low.dropna(inplace=True)
-
         # Vectorize the low timeframe entry module decisions
         df_decision_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low, run_mode='backtest')
         df_decision_entry_long = df_decision_entry.loc[df_decision_entry['decision'] == 1]
         df_decision_entry_short = df_decision_entry.loc[df_decision_entry['decision'] == -1]
+
+        ### ADDITIONAL INDICATORS
+        # Indicator #1: RSI and its EMA21
+        # df_OHLC_low['RSI'] = talib.RSI(df_OHLC_low['Close'], timeperiod=14)
+        # df_OHLC_low['RSI_EMA6'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=6)
+        # df_OHLC_low['RSI_EMA12'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=12)
+        # df_OHLC_low['RSI_EMA24'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=24)
+        # df_OHLC_low.dropna(inplace=True)
+
+
 
         # Save the csv for debugging
         df_decision_entry.to_csv(os.path.join(self.backtesting_dir, 'decision_entry.csv'))
@@ -137,25 +139,29 @@ class Backtesting:
             if cooling_down_counter > 0:
                 cooling_down_counter -= 1
 
-            # get the current date
+            ### ENTRY MODULE
+            # get the current date and entry decision
             cur_date_low_timeframe = datetime_low
             decision_entry = df_decision_entry['decision'].loc[cur_date_low_timeframe]
             df_entry_log_long['decision_entry'].loc[cur_date_low_timeframe] = decision_entry
             print(f"low_timeframe = {cur_date_low_timeframe}")
 
-            # debug get all decisions
+            ### DIRECTION MODULE
+            # convert datetime
             cur_date_high_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_high)
             cur_date_high_timeframe = cur_date_high_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
+            # run direction module
             try:
                 decision_direction = df_decision_direction['decision'].loc[cur_date_high_timeframe]
                 df_entry_log_long['decision_direction'].loc[cur_date_low_timeframe] = decision_direction
             except:
                 print(f"- high_timeframe = {cur_date_high_timeframe}")
-                print('- error - direction module not satisfied')
+                print('- error - invalid direction module')
                 continue
 
-            # pattern direction
+            ### PATTERN MODULE
+            # convert dataframe
             cur_date_mid_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_mid)
             if self.timeframe_mid == "12h":
                 hours_offset_mid = 12
@@ -164,15 +170,16 @@ class Backtesting:
             cur_date_mid_timeframe = cur_date_mid_timeframe - timedelta(hours=hours_offset_mid)
             cur_date_mid_timeframe = cur_date_mid_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
-            # check the pattern module
+            # run specific pattern strategy
             df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe].copy()
             df_OHLC_mid_temp = df_OHLC_mid.copy()
-            decision_pattern, fig_hubs = (
-                self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp))
-            df_entry_log_long['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
-            # except:
-            #     print('- error - pattern module not satisfied')
-            #     continue
+            try:
+                decision_pattern, fig_hubs = (
+                    self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp))
+                df_entry_log_long['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
+            except:
+                print('- error - invalid pattern module')
+                continue
 
 
         # save the entry log
