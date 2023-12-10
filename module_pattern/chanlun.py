@@ -40,6 +40,207 @@ def convert_df_to_bars(df_OHLC, time_scale, name_symbol):
 
     return bars_raw
 
+def convert_bi_list_to_df(bi_list):
+    """Convert a list of BI objects to a DataFrame"""
+    # Define the data types for each column
+    data_types = {
+        # 'Date': 'object',
+        'Idx': 'int64',
+        'pv_type': 'object',
+        'factor_value': 'float64',
+    }
+
+    # Create an empty DataFrame with specified data types
+    df_PV_bi = pd.DataFrame({col: pd.Series(dtype=typ) for col, typ in data_types.items()})
+
+    # Populate the DataFrame
+    for bi in bi_list:
+        # df_PV_bi.at[bi.sdt, 'Date'] = bi.sdt
+        df_PV_bi.at[bi.sdt, 'Idx'] = -1
+        if bi.direction == Direction.Up:
+            df_PV_bi.at[bi.sdt, 'pv_type'] = 'Valley'
+            df_PV_bi.at[bi.sdt, 'factor_value'] = bi.low
+
+        elif bi.direction == Direction.Down:
+            df_PV_bi.at[bi.sdt, 'pv_type'] = 'Peak'
+            df_PV_bi.at[bi.sdt, 'factor_value'] = bi.high
+
+    return df_PV_bi
+
+def find_hubs(df_PV_segments):
+
+    # Create a list to store the hubs
+    list_hubs = []
+
+    # Define a function to check if two line segments overlap
+    def check_new_hub_formation(factor_0_type, factor_0, factor_1, factor_2, factor_3):
+        hub_high = None
+        hub_low = None
+        is_new_hub = False
+        if factor_0_type == 'Valley':   ## for a down hub
+            is_new_hub = max(factor_0, factor_2) < min(factor_1, factor_3)
+            if is_new_hub:
+                hub_high = min(factor_1, factor_3)
+                hub_low = max(factor_0, factor_2)
+        elif factor_0_type == 'Peak':  ## for a up hub
+            is_new_hub = min(factor_0, factor_2) > max(factor_1, factor_3)
+            if is_new_hub:
+                hub_high = min(factor_0, factor_2)
+                hub_low = max(factor_1, factor_3)
+        return is_new_hub, hub_high, hub_low
+
+    def check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
+        if factor_cur_type == 'Valley':
+            if factor_cur_value > cur_hub['high']:
+                return False
+            else:
+                return True
+        elif factor_cur_type == 'Peak':
+            if factor_cur_value < cur_hub['low']:
+                return False
+            else:
+                return True
+
+    # initialize state variables
+    last_included_factor_idx = -1
+    in_hub = False
+
+    for i in range(0, len(df_PV_segments) - 3):
+
+        print('Processing factor: ' + str(i))
+        if i < last_included_factor_idx:
+            # Skip this iteration if it's part of an already processed hub
+            continue
+
+        # Get the current factor and the next three factors
+        factor_0 = df_PV_segments.iloc[i]['factor_value']
+        factor_1 = df_PV_segments.iloc[i + 1]['factor_value']
+        factor_2 = df_PV_segments.iloc[i + 2]['factor_value']
+        factor_3 = df_PV_segments.iloc[i + 3]['factor_value']
+        factor_0_idx = df_PV_segments.index[i]
+        factor_1_idx = df_PV_segments.index[i + 1]
+        factor_2_idx = df_PV_segments.index[i + 2]
+        factor_3_idx = df_PV_segments.index[i + 3]
+        factor_0_type = df_PV_segments.iloc[i]['pv_type']
+
+        # Case 1 - if not in a hub, then check if a new hub is formed
+        if not in_hub:
+
+            # Determine if the first three lines (current and next two factors) form a hub
+            is_new_hub, hub_high, hub_low = check_new_hub_formation(factor_0_type, factor_0, factor_1, factor_2, factor_3)
+
+            # if no new hub can be formed, continue to the next iteration
+            if not is_new_hub:
+                continue  # Skip to next iteration if not a hub
+            # otherwise, define the new hub
+            else:
+
+                # If a new hub is formed, then set the state variables
+                in_hub = True
+                cur_hub = {'start_idx': factor_1_idx,
+                           'end_idx': factor_3_idx,
+                           'all_idx': [factor_0_idx, factor_1_idx, factor_2_idx, factor_3_idx],
+                           'num_segments': 3,
+                           'direction': 'down' if factor_0_type == 'Valley' else 'up',
+                           'high': hub_high,
+                           'low': hub_low}
+
+                # update the hub direction based on its previous hub
+                if len(list_hubs) > 0:
+                    if list_hubs[-1]['low'] > cur_hub['low']:
+                        cur_hub['direction'] = 'down'
+                    elif list_hubs[-1]['high'] < cur_hub['high']:
+                        cur_hub['direction'] = 'up'
+                cur_hub_direction = cur_hub['direction']
+
+                # continue to check if the next few factors belong to this hub
+                for j in range(i + 4, len(df_PV_segments)):
+                    factor_cur_value = df_PV_segments.iloc[j]['factor_value']
+                    factor_cur_idx = df_PV_segments.index[j]
+                    factor_cur_type = df_PV_segments.iloc[j]['pv_type']
+
+                    # if the current factor belongs to the current hub, then update the hub
+                    if check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
+                        cur_hub['end_idx'] = factor_cur_idx
+                        cur_hub['num_segments'] += 1
+                        cur_hub['all_idx'].append(factor_cur_idx)
+                        # debug_logging(f'Extended hub end to {factor_cur_idx}')
+                    else:
+                        # hub breaks
+                        in_hub = False
+
+                        # check where the hub should break based on the hub direction
+                        if cur_hub_direction == 'down':
+                            if factor_cur_type == 'Valley':
+                                # down hub should end at peak, so drop the last factor
+                                cur_hub['end_idx'] = df_PV_segments.index[j - 1]
+                                cur_hub['num_segments'] -= 1
+                                last_included_factor_idx = j - 1
+                            elif factor_cur_type == 'Peak':
+                                cur_hub['end_idx'] = df_PV_segments.index[j - 1]
+                                last_included_factor_idx = j - 1
+                        elif cur_hub_direction == 'up':
+                            if factor_cur_type == 'Peak':
+                                # up hub should end at valley, so drop the last factor
+                                cur_hub['end_idx'] = df_PV_segments.index[j - 1]
+                                cur_hub['num_segments'] -= 1
+                                last_included_factor_idx = j - 1
+                            elif factor_cur_type == 'Valley':
+                                cur_hub['end_idx'] = df_PV_segments.index[j - 1]
+                                last_included_factor_idx = j - 1
+
+                        # append the hub and break
+                        list_hubs.append(cur_hub)
+                        break
+
+                    # case if it is the last factor
+                    if j == len(df_PV_segments) - 1:
+                        in_hub = False
+                        list_hubs.append(cur_hub)
+                        last_included_factor_idx = j
+                        # debug_logging(f'Hub breaks at {factor_cur_idx}')
+                        break
+
+    print(list_hubs)
+    df_hubs = pd.DataFrame(list_hubs)
+
+    # --- Visualization
+    # if debug_plot:
+        # debug_plot_hubs_using_HL(df_PV_segments, df_HL, df_hubs)
+        # debug_plot_hubs_using_OHLC(df_PV_segments, df_OHLC, df_hubs)
+    # fig_hubs = debug_plot_hubs(df_PV_segments, df_HL, df_OHLC, df_hubs)
+
+    return df_hubs
+
+def pattern_setup_trending_hubs_pull_back(df_hubs, cur_price):
+    """ This function identifies the pullback trading setup for trending hubs"""
+
+    # Extract the last two hubs
+    if len(df_hubs) < 2:
+        return 0, 'No valid setup'
+    else:
+        hub_cur = df_hubs.iloc[-1]
+        hub_prev = df_hubs.iloc[-2]
+
+    # # current price
+    # cur_price = df_OHLC.iloc[-1]['Close']
+
+    # --- Check the relation between the two hubs
+    # Case 1 - the last hub is higher than the previous hub (up trend)
+    msg = 'No valid setup'
+    if hub_cur['low'] > hub_prev['high']:  # up trending hubs
+        if cur_price < hub_cur['high']:   # loose condition, if price lower than the current high, OK
+            msg = 'Pullback long setup'
+            return 1, msg  # pullback long setup
+        else:
+            return 0, msg  # no valid setup
+    # Case 2 - the last hub is lower than the previous one (down trend)
+    elif hub_cur['high'] < hub_prev['low']:  # down trending hubs
+        if cur_price > hub_cur['low']:  # loose condition, if price higher than the current low, OK
+            msg = 'Pullback short setup'
+            return -1, msg  # pullback short setup
+        else:
+            return 0, msg  # no valid setup
 
 def remove_include(k1: NewBar, k2: NewBar, k3: RawBar):
     """去除包含关系：输入三根k线，其中k1和k2为没有包含关系的K线，k3为原始K线
@@ -96,7 +297,6 @@ def remove_include(k1: NewBar, k2: NewBar, k3: RawBar):
                     close=k3.close, high=k3.high, low=k3.low, vol=k3.vol, amount=k3.amount, elements=[k3])
         return False, k4
 
-
 def check_fx(k1: NewBar, k2: NewBar, k3: NewBar):
     """查找分型
 
@@ -126,7 +326,6 @@ def check_fx(k1: NewBar, k2: NewBar, k3: NewBar):
 
     return fx
 
-
 def check_fxs(bars: List[NewBar]) -> List[FX]:
     """输入一串无包含关系K线，查找其中所有分型
 
@@ -153,7 +352,6 @@ def check_fxs(bars: List[NewBar]) -> List[FX]:
             else:
                 fxs.append(fx)
     return fxs
-
 
 def check_bi(bars: List[NewBar], benchmark=None):
     """输入一串无包含关系K线，查找其中的一笔
@@ -206,7 +404,6 @@ def check_bi(bars: List[NewBar], benchmark=None):
     else:
         return None, bars
 
-
 def generate_line_by_bi(line_list: List[Line], bi_list: List[BI]):
     """根据笔列表生成线段，每次生成一根线段
 
@@ -250,7 +447,6 @@ def generate_line_by_bi(line_list: List[Line], bi_list: List[BI]):
 
     return line_list, bi_list
 
-
 def check_line_by_bi(bi_list: List[BI]):
     """输入一串笔序列，查找其中的一根线段"""
     if not bi_list or len(bi_list) < 3:
@@ -268,7 +464,6 @@ def check_line_by_bi(bi_list: List[BI]):
             break
 
     return new_line, bi_list
-
 
 def generate_biHub(hubs: List[BiHub], bi_list: List[BI], point_list: List[Point]):
     """根据笔列表生成中枢，每次生成一个中枢
@@ -330,7 +525,6 @@ def generate_biHub(hubs: List[BiHub], bi_list: List[BI], point_list: List[Point]
         hubs.append(cur_hub)
 
     return hubs, bi_list, point_list
-
 
 def check_biHub(bi_list: List[BI], last_hub):
     """输入一串笔，查找其中的第一个中枢
@@ -431,7 +625,6 @@ def generate_lineHub(hubs: List[LineHub], line_list: List[Line], point_list: Lis
 
     return hubs, line_list, point_list
 
-
 def check_lineHub(line_list: List[Line], last_hub):
     """输入一串线段，查找其中的第一个中枢
 
@@ -503,31 +696,21 @@ class CZSC:
         for bar in bars:
             self.update(bar)
 
-        # 生成笔中枢
-        self.bi_hubs, self.bi_list, self.bi_points = generate_biHub(self.bi_hubs, self.bi_list, [])
-        print(f'number of bi hubs: {len(self.bi_hubs)}')
+        # convert bi_list to dataframe
+        bi_list = self.bi_list.copy()
+        df_bi = convert_bi_list_to_df(bi_list)
 
-        for bi_hub in self.bi_hubs:
-            try:
-                print(bi_hub.ZG, bi_hub.ZD, bi_hub.entry.edt, bi_hub.leave.sdt)
-            except:
-                print('error')
-            # # print(bi_hub.ZG, bi_hub.ZD)
-            # for bi in bi_hub.elements:
-            #     print(bi.fx_a.dt, bi.fx_b.dt)
+        # TODO - need to improve hub detection calculation robustness
+        # calculate hubs
+        df_hubs = find_hubs(df_bi)
+        self.df_bi_hubs = df_hubs
 
-        # # 生成线段
-        # self.line_list, self.bi_list = generate_line_by_bi(self.line_list, self.bi_list)
-        # for line in self.line_list:
-        #     print(line.start_dt, line.end_dt)
-
-        # # 生成线段中枢
-        # self.line_hubs, self.line_list, self.line_points = generate_lineHub(self.line_hubs, self.line_list, [])
+        # calculate the pullback setup
+        cur_price = bars[-1].close
+        setup, msg = pattern_setup_trending_hubs_pull_back(df_hubs, cur_price)
 
         # plot using to_echarts
         self.chart = self.to_echarts()
-
-        # plot using plotly
         self.chart = self.to_plotly()
         self.chart.show()
 
@@ -681,12 +864,15 @@ class CZSC:
         existing_shapes = list(kline.fig.layout.shapes) if kline.fig.layout.shapes is not None else []
 
         # Loop through each bi_hub and add rectangles
-        for bi_hub in self.bi_hubs:
+        for idx in range(len(self.df_bi_hubs)):
+            bi_hub = self.df_bi_hubs.iloc[idx]
+
+
             try:
                 rect = go.layout.Shape(
                     type="rect",
-                    x0=bi_hub.entry.sdt, x1=bi_hub.leave.sdt,
-                    y0=bi_hub.ZG, y1=bi_hub.ZD,
+                    x0=bi_hub.start_idx, x1=bi_hub.end_idx,
+                    y0=bi_hub.low, y1=bi_hub.high,
                     line=dict(width=2),
                     fillcolor="LightSkyBlue",
                     opacity=0.5,
