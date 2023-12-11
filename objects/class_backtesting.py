@@ -1,18 +1,15 @@
 import os
-from datetime import datetime, timedelta
-import talib
 import pandas as pd
-# import importlib
-
-from utils import *
-from strategy import Strategy
+import talib
+from datetime import datetime, timedelta
+from utils.util_general import debug_logging
+from objects.class_strategy import Strategy
 
 # Adjust dir_data and add dir_utils to the Python path
 current_script_dir = os.path.dirname(__file__)
-dir_data = os.path.join(current_script_dir, '', 'module_data')
+dir_data = os.path.join(current_script_dir, '', '../module_data')
 dir_data = os.path.normpath(dir_data)
-dir_backtesting = os.path.join(current_script_dir, '', 'module_backtesting')
-
+dir_backtesting = os.path.join(current_script_dir, '', '../module_backtesting')
 
 def convert_to_higher_timeframe(cur_date_low_timeframe, higher_timeframe):
     # Convert string to datetime object
@@ -41,7 +38,6 @@ def convert_to_higher_timeframe(cur_date_low_timeframe, higher_timeframe):
         raise ValueError("Unsupported higher timeframe")
 
     return converted_datetime
-
 
 class Backtesting:
 
@@ -104,32 +100,28 @@ class Backtesting:
         df_OHLC_low = pd.read_csv(file_path, index_col=0)
         df_OHLC_low = df_OHLC_low.loc[self.bt_start_date: self.bt_end_date]
 
+        # Indicator #1: RSI and its EMA21
+        df_OHLC_low['RSI'] = talib.RSI(df_OHLC_low['Close'], timeperiod=14)
+        df_OHLC_low['RSI_EMA6'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=6)
+        df_OHLC_low['RSI_EMA12'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=12)
+        df_OHLC_low['RSI_EMA24'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=24)
+        df_OHLC_low.dropna(inplace=True)
+
         # Vectorize the low timeframe entry module decisions
         df_decision_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low, run_mode='backtest')
         df_decision_entry_long = df_decision_entry.loc[df_decision_entry['decision'] == 1]
         df_decision_entry_short = df_decision_entry.loc[df_decision_entry['decision'] == -1]
-
-        ### ADDITIONAL INDICATORS
-        # Indicator #1: RSI and its EMA21
-        # df_OHLC_low['RSI'] = talib.RSI(df_OHLC_low['Close'], timeperiod=14)
-        # df_OHLC_low['RSI_EMA6'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=6)
-        # df_OHLC_low['RSI_EMA12'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=12)
-        # df_OHLC_low['RSI_EMA24'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=24)
-        # df_OHLC_low.dropna(inplace=True)
-
-
 
         # Save the csv for debugging
         df_decision_entry.to_csv(os.path.join(self.backtesting_dir, 'decision_entry.csv'))
         df_decision_entry_long.to_csv(os.path.join(self.backtesting_dir, 'df_decision_entry_long.csv'))
         df_decision_entry_short.to_csv(os.path.join(self.backtesting_dir, 'df_decision_entry_short.csv'))
 
+        ### ------------ Iterations for backtesting ------------ ###
+        """ Since we have vectorized the entry module, we can now just loop through the identified entries exclusively"""
         # Initialize the entry log
         df_entry_log_long = pd.DataFrame(0, index=df_OHLC_low.index,
                                     columns=['decision_direction', 'decision_pattern', 'decision_entry', 'decision_final'])
-
-        ### ------------ Iterations ------------ ###
-        """ Since we have vectorized the entry module, we can just loop through the identified entries"""
 
         ### ------------ Long entries ------------ ###
         # for idx_low, datetime_low in enumerate(df_decision_entry_long.index):
@@ -151,7 +143,7 @@ class Backtesting:
             cur_date_high_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_high)
             cur_date_high_timeframe = cur_date_high_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
-            # run direction module
+            # read direction module
             try:
                 decision_direction = df_decision_direction['decision'].loc[cur_date_high_timeframe]
                 df_entry_log_long['decision_direction'].loc[cur_date_low_timeframe] = decision_direction
@@ -175,7 +167,12 @@ class Backtesting:
             df_OHLC_mid_temp = df_OHLC_mid.copy()
             try:
                 decision_pattern, fig_hubs = (
-                    self.strategy.strategy_mid_timeframe.main(df_OHLC_mid_temp))
+                    self.strategy.strategy_mid_timeframe.main(
+                        df_OHLC_mid_temp,
+                        name_symbol=self.name_symbol,
+                        time_frame=self.timeframe_mid,
+                        num_candles=300,
+                    ))
                 df_entry_log_long['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
             except:
                 print('- error - invalid pattern module')
@@ -185,18 +182,18 @@ class Backtesting:
         # save the entry log
         df_entry_log_long.to_csv(os.path.join(self.backtesting_dir, 'entry_log_long.csv'))
 
-if __name__ == '__main__':
-
-    # Define the backtesting object
-    backtesting = Backtesting(name_symbol='BTCUSDT', data_source='binance', name_strategy='chanlun',
-                              timeframe_high='1w', timeframe_mid='12h', timeframe_low='1h',
-                              function_high_timeframe='always_long',
-                              function_mid_timeframe='chanlun',
-                              function_low_timeframe='RSI_extreme_cross',
-                              bt_start_date='2023-01-01 00:00:00+00:00',
-                              bt_end_date='2023-12-09 00:00:00+00:00')
-
-    # Run the backtesting
-    trading_decision = backtesting.run_backtesting_vectorize_high_low()
-
-    debug_logging(trading_decision)
+# if __name__ == '__main__':
+#
+#     # Define the backtesting object
+#     backtesting = Backtesting(name_symbol='BTCUSDT', data_source='binance', name_strategy='chanlun',
+#                               timeframe_high='1w', timeframe_mid='12h', timeframe_low='1h',
+#                               function_high_timeframe='always_long',
+#                               function_mid_timeframe='chanlun',
+#                               function_low_timeframe='RSI_extreme_cross',
+#                               bt_start_date='2023-01-01 00:00:00+00:00',
+#                               bt_end_date='2023-12-09 00:00:00+00:00')
+#
+#     # Run the backtesting
+#     trading_decision = backtesting.run_backtesting_vectorize_high_low()
+#
+#     debug_logging(trading_decision)

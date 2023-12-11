@@ -1,16 +1,10 @@
-import numpy as np
 import pandas as pd
 import os
-import traceback
 import plotly.graph_objs as go
-from typing import List, Callable
-from collections import OrderedDict
-from datetime import datetime
-from module_pattern.utils_chanlun.objects import BI, FakeBI, FX, RawBar, NewBar, Line, BiHub, LineHub, Point
-from module_pattern.utils_chanlun.enum import Mark, Direction, Operate
+from typing import List
+from module_pattern.utils_chanlun.objects import BI, FX, RawBar, NewBar, BiHub
+from module_pattern.utils_chanlun.enum import Mark, Direction
 from module_pattern.utils_chanlun.utils_plot import kline_pro, KlineChart
-
-
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
@@ -53,17 +47,25 @@ def convert_bi_list_to_df(bi_list):
     # Create an empty DataFrame with specified data types
     df_PV_bi = pd.DataFrame({col: pd.Series(dtype=typ) for col, typ in data_types.items()})
 
-    # Populate the DataFrame
+    # Manually add the first factor/Fx
+    df_PV_bi.at[bi_list[0].sdt, 'Idx'] = -1
+    if bi_list[0].direction == Direction.Up:
+        df_PV_bi.at[bi_list[0].sdt, 'pv_type'] = 'Valley'
+        df_PV_bi.at[bi_list[0].sdt, 'factor_value'] = bi_list[0].low
+    elif bi_list[0].direction == Direction.Down:
+        df_PV_bi.at[bi_list[0].sdt, 'pv_type'] = 'Peak'
+        df_PV_bi.at[bi_list[0].sdt, 'factor_value'] = bi_list[0].high
+
+    # Populate the rest DataFrame using bi ends
     for bi in bi_list:
-        # df_PV_bi.at[bi.sdt, 'Date'] = bi.sdt
-        df_PV_bi.at[bi.sdt, 'Idx'] = -1
+        df_PV_bi.at[bi.edt, 'Idx'] = -1
         if bi.direction == Direction.Up:
-            df_PV_bi.at[bi.sdt, 'pv_type'] = 'Valley'
-            df_PV_bi.at[bi.sdt, 'factor_value'] = bi.low
+            df_PV_bi.at[bi.edt, 'pv_type'] = 'Peak'
+            df_PV_bi.at[bi.edt, 'factor_value'] = bi.high
 
         elif bi.direction == Direction.Down:
-            df_PV_bi.at[bi.sdt, 'pv_type'] = 'Peak'
-            df_PV_bi.at[bi.sdt, 'factor_value'] = bi.high
+            df_PV_bi.at[bi.edt, 'pv_type'] = 'Valley'
+            df_PV_bi.at[bi.edt, 'factor_value'] = bi.low
 
     return df_PV_bi
 
@@ -238,8 +240,6 @@ def pattern_setup_trending_hubs_pull_back(df_hubs, cur_price):
         hub_cur = df_hubs.iloc[-1]
         hub_prev = df_hubs.iloc[-2]
 
-    # # current price
-    # cur_price = df_OHLC.iloc[-1]['Close']
 
     # --- Check the relation between the two hubs
     # Case 1 - the last hub is higher than the previous hub (up trend)
@@ -420,7 +420,6 @@ def check_bi(bars: List[NewBar], benchmark=None):
     else:
         return None, bars
 
-
 class CZSC:
     def __init__(self,
                  bars: List[RawBar],
@@ -459,7 +458,19 @@ class CZSC:
 
         # convert bi_list to dataframe
         bi_list = self.bi_list.copy()
+
+        # convert bi to dataframe
         df_bi = convert_bi_list_to_df(bi_list)
+
+        # manually add the ending bi
+        if df_bi.iloc[-1]['pv_type'] == 'Peak':
+            df_bi.loc[bars[-1].dt, 'Idx'] = -1
+            df_bi.loc[bars[-1].dt, 'pv_type'] = 'Valley'
+            df_bi.loc[bars[-1].dt, 'factor_value'] = bars[-1].low
+        elif df_bi.iloc[-1]['pv_type'] == 'Valley':
+            df_bi.loc[bars[-1].dt, 'Idx'] = -1
+            df_bi.loc[bars[-1].dt, 'pv_type'] = 'Peak'
+            df_bi.loc[bars[-1].dt, 'factor_value'] = bars[-1].high
 
         # calculate bi hubs 笔中枢的处理
         df_hubs = find_hubs(df_bi)
@@ -472,9 +483,9 @@ class CZSC:
         self.msg = msg
 
         # # plot using to_echarts
-        # self.chart = self.to_echarts()
-        # self.chart = self.to_plotly()
-        # self.chart.show()
+        self.chart = self.to_echarts()
+        self.chart = self.to_plotly()
+        self.chart.show()
 
 
     def __repr__(self):
@@ -506,14 +517,6 @@ class CZSC:
             self.bars_ubi = bars_ubi_
             return
 
-        # if self.verbose and len(bars_ubi) > 100:
-        #     print(f"{self.symbol} - {self.freq} - {bars_ubi[-1].dt} 未完成笔延伸数量: {len(bars_ubi)}")
-
-        # if envs.get_bi_change_th() > 0.5 and len(self.bi_list) >= 5:
-        #     price_seq = [x.power_price for x in self.bi_list[-5:]]
-        #     benchmark = min(self.bi_list[-1].power_price, sum(price_seq) / len(price_seq))
-        # else:
-        #     benchmark = None
         benchmark = None
 
         bi, bars_ubi_ = check_bi(bars_ubi, benchmark)
@@ -733,16 +736,14 @@ class CZSC:
         return fxs
 
 
-
-
 def main(df_OHLC_mid,
-         name_symbol='BTCUSDT',
-         time_frame='12h',
-         num_candles=400,
-         debug_plot=False,
-         use_high_low=False):
+         name_symbol,
+         time_frame,
+         num_candles=300,
+         # use_high_low=False,
+         ):
 
-    # convert DataFrame to bars
+    # convert DataFrame to bars object
     df_OHLC_mid = df_OHLC_mid[-num_candles:]
     bars = convert_df_to_bars(df_OHLC_mid, time_frame, name_symbol)
 

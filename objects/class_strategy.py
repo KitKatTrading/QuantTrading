@@ -4,7 +4,7 @@ import importlib
 
 # Adjust dir_data and add dir_utils to the Python path
 current_script_dir = os.path.dirname(__file__)
-dir_data = os.path.join(current_script_dir, '', 'module_data')
+dir_data = os.path.join(current_script_dir, '', '../module_data')
 dir_data = os.path.normpath(dir_data)
 
 
@@ -118,8 +118,6 @@ class Strategy:
                 trading_setup = 1
 
         return trading_setup
-
-
 
 
 if __name__ == '__main__':
