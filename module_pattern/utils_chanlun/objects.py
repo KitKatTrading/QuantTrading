@@ -15,7 +15,7 @@ from datetime import datetime
 # from deprecated import deprecated
 from typing import List, Callable, Dict
 # from czsc.enum import Mark, Direction, Freq, Operate
-# from czsc.utils.corr import single_linear
+# from czsc.Utils.corr import single_linear
 
 
 # coding: utf-8

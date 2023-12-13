@@ -35,7 +35,7 @@ def convert_df_to_bars(df_OHLC, time_scale, name_symbol):
     return bars_raw
 
 def convert_bi_list_to_df(bi_list):
-    """Convert a list of BI objects to a DataFrame"""
+    """Convert a list of BI Objects to a DataFrame"""
     # Define the data types for each column
     data_types = {
         # 'Date': 'object',
@@ -483,9 +483,9 @@ class CZSC:
         self.msg = msg
 
         # # plot using to_echarts
-        self.chart = self.to_echarts()
-        self.chart = self.to_plotly()
-        self.chart.show()
+        # self.chart = self.to_echarts()
+        # self.chart = self.to_plotly()
+        # self.chart.show()
 
 
     def __repr__(self):

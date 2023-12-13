@@ -4,7 +4,7 @@ import plotly.graph_objs as go
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
-from utils import debug_logging
+from Utils import debug_logging
 
 DEBUG_PLOT = False
 

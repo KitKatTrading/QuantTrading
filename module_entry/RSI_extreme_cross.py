@@ -1,26 +1,22 @@
-import plotly.graph_objects as go
-# import pandas as pd
 import numpy as np
+import talib
 from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 
-def propagate_values(df, len_prop):
-    i = 0
-    while i < len(df):
-        if df.iloc[i]['value'] != 0:
-            value = df.iloc[i]['value']
-            j = 1
-            while j < len_prop + 1 and i + j < len(df) and df.iloc[i + j]['value'] == 0:
-                df.at[df.index[i + j], 'value'] = value
-                j += 1
-            i += j
-        else:
-            i += 1
-
+from Utils.util_general import propagate_values
 
 def main(df_OHLC_low,
          RSI_overbought=65, RSI_oversold=35,
          length_extreme_value_effective=12,
          run_mode='backtest'):
+
+    # calculate indicators
+    # Indicator #1: RSI and its EMA21
+    df_OHLC_low['RSI'] = talib.RSI(df_OHLC_low['Close'], timeperiod=14)
+    df_OHLC_low['RSI_EMA6'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=6)
+    df_OHLC_low['RSI_EMA12'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=12)
+    df_OHLC_low['RSI_EMA21'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=21)
+    df_OHLC_low.dropna(inplace=True)
 
     # verify run_mode
     if run_mode == 'live':

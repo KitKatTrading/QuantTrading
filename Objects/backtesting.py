@@ -2,14 +2,16 @@ import os
 import pandas as pd
 import talib
 from datetime import datetime, timedelta
-from utils.util_general import debug_logging
-from objects.class_strategy import Strategy
+from Utils.util_general import debug_logging
+from Objects.strategy import Strategy
 
 # Adjust dir_data and add dir_utils to the Python path
-current_script_dir = os.path.dirname(__file__)
-dir_data = os.path.join(current_script_dir, '', '../module_data')
-dir_data = os.path.normpath(dir_data)
-dir_backtesting = os.path.join(current_script_dir, '', '../module_backtesting')
+# current_script_dir = os.path.dirname(__file__)
+# dir_data = os.path.join(current_script_dir, '', '../module_data')
+# dir_data = os.path.normpath(dir_data)
+# # dir_backtesting = os.path.join(current_script_dir, '', '../module_backtesting')
+dir_data = 'module_data'
+dir_backtesting = 'module_backtesting'
 
 def convert_to_higher_timeframe(cur_date_low_timeframe, higher_timeframe):
     # Convert string to datetime object
@@ -29,15 +31,47 @@ def convert_to_higher_timeframe(cur_date_low_timeframe, higher_timeframe):
         weekday = datetime_obj.weekday()
         start_of_week = datetime_obj - timedelta(days=weekday)
         converted_datetime = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif higher_timeframe in ["8h", "4h"]:
-        # For 8h or 4h timeframes, find the start of the nearest period
-        hours = 8 if higher_timeframe == "8h" else 4
+    elif higher_timeframe in ["8h", "4h", "2h", "1h"]:
+        # For 8h, 4h, 2h or 1h timeframes, find the start of the nearest period
+        hours = int(higher_timeframe[0])
         hour_rounded_down = datetime_obj.hour - (datetime_obj.hour % hours)
         converted_datetime = datetime_obj.replace(hour=hour_rounded_down, minute=0, second=0, microsecond=0)
     else:
         raise ValueError("Unsupported higher timeframe")
 
     return converted_datetime
+
+def check_single_trade_outcome(df_OHLC_low, entry_datetime, entry_price, direction, exit_datetime, exit_price):
+    """ Check the outcome of a single trade """
+    # Get the entry and exit prices
+    entry_price = df_OHLC_low['Close'].loc[entry_datetime]
+    exit_price = df_OHLC_low['Close'].loc[exit_datetime]
+
+    # Calculate the PnL
+    if direction == 'long':
+        pnl = exit_price - entry_price
+    elif direction == 'short':
+        pnl = entry_price - exit_price
+    else:
+        raise ValueError("Unsupported direction")
+
+    return pnl
+
+class OneTrade:
+    """ A class to represent a single trade """
+    def __init__(self, symbol, name_strategy, entry_datetime, entry_price, exit_datetime, exit_price, direction, pnl):
+        self.symbol = symbol
+        self.name_strategy = name_strategy
+        self.entry_datetime = entry_datetime
+        self.entry_price = entry_price
+        self.exit_datetime = exit_datetime
+        self.exit_price = exit_price
+        self.direction = direction
+        self.pnl = pnl
+
+    def __str__(self):
+        return f"entry_datetime = {self.entry_datetime}, entry_price = {self.entry_price}, exit_datetime = {self.exit_datetime}, exit_price = {self.exit_price}, direction = {self.direction}, pnl = {self.pnl}"
+
 
 class Backtesting:
 
@@ -71,12 +105,15 @@ class Backtesting:
                                  function_mid_timeframe=self.function_mid_timeframe,
                                  function_low_timeframe=self.function_low_timeframe)
 
-    def run_backtesting_vectorize_high_low(self):
+    def run_backtesting_vectorize_high_low(self,
+                                           manual_review_each_trade=True,
+                                           trade_direction='long',
+                                           save_plots=True,
+                                           save_csv=True,
+                                           ):
+        """ Run the backtesting using vectorized high and low timeframe modules """
 
-        # initialize the cooling down period
-        cooling_down_period = 12
-        cooling_down_counter = 0
-
+        ### SECTION 1 - Preprocessing the entry signals that can be vectorized
         ### DIRECTION MODULE
         # Load data
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_high + '.csv')
@@ -100,22 +137,17 @@ class Backtesting:
         df_OHLC_low = pd.read_csv(file_path, index_col=0)
         df_OHLC_low = df_OHLC_low.loc[self.bt_start_date: self.bt_end_date]
 
-        # Indicator #1: RSI and its EMA21
-        df_OHLC_low['RSI'] = talib.RSI(df_OHLC_low['Close'], timeperiod=14)
-        df_OHLC_low['RSI_EMA6'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=6)
-        df_OHLC_low['RSI_EMA12'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=12)
-        df_OHLC_low['RSI_EMA24'] = talib.EMA(df_OHLC_low['RSI'], timeperiod=24)
-        df_OHLC_low.dropna(inplace=True)
-
         # Vectorize the low timeframe entry module decisions
         df_decision_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low, run_mode='backtest')
         df_decision_entry_long = df_decision_entry.loc[df_decision_entry['decision'] == 1]
         df_decision_entry_short = df_decision_entry.loc[df_decision_entry['decision'] == -1]
 
-        # Save the csv for debugging
-        df_decision_entry.to_csv(os.path.join(self.backtesting_dir, 'decision_entry.csv'))
-        df_decision_entry_long.to_csv(os.path.join(self.backtesting_dir, 'df_decision_entry_long.csv'))
-        df_decision_entry_short.to_csv(os.path.join(self.backtesting_dir, 'df_decision_entry_short.csv'))
+        ### Output
+        if save_csv:
+            # Save the csv for debugging
+            df_decision_entry.to_csv(os.path.join(self.backtesting_dir, 'decision_entry.csv'))
+            df_decision_entry_long.to_csv(os.path.join(self.backtesting_dir, 'df_decision_entry_long.csv'))
+            df_decision_entry_short.to_csv(os.path.join(self.backtesting_dir, 'df_decision_entry_short.csv'))
 
         ### ------------ Iterations for backtesting ------------ ###
         """ Since we have vectorized the entry module, we can now just loop through the identified entries exclusively"""
@@ -123,7 +155,13 @@ class Backtesting:
         df_entry_log_long = pd.DataFrame(0, index=df_OHLC_low.index,
                                     columns=['decision_direction', 'decision_pattern', 'decision_entry', 'decision_final'])
 
-        ### ------------ Long entries ------------ ###
+
+        ### SECTION 2 - Loop through the entries to execute the trades
+
+        # initialize state variables
+        cooling_down_counter = 0
+        max_cooling_down = 12
+
         # for idx_low, datetime_low in enumerate(df_decision_entry_long.index):
         for idx_low, datetime_low in enumerate(df_OHLC_low.index):
 
@@ -157,8 +195,14 @@ class Backtesting:
             cur_date_mid_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_mid)
             if self.timeframe_mid == "12h":
                 hours_offset_mid = 12
+            elif self.timeframe_mid == '8h':
+                hours_offset_mid = 8
             elif self.timeframe_mid == '4h':
                 hours_offset_mid = 4
+            elif self.timeframe_mid == '2h':
+                hours_offset_mid = 2
+            elif self.timeframe_mid == '1h':
+                hours_offset_mid = 1
             cur_date_mid_timeframe = cur_date_mid_timeframe - timedelta(hours=hours_offset_mid)
             cur_date_mid_timeframe = cur_date_mid_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
@@ -173,27 +217,8 @@ class Backtesting:
                         time_frame=self.timeframe_mid,
                         num_candles=300,
                     ))
+                # fig_hubs.show()
                 df_entry_log_long['decision_pattern'].loc[cur_date_low_timeframe] = decision_pattern
             except:
                 print('- error - invalid pattern module')
                 continue
-
-
-        # save the entry log
-        df_entry_log_long.to_csv(os.path.join(self.backtesting_dir, 'entry_log_long.csv'))
-
-# if __name__ == '__main__':
-#
-#     # Define the backtesting object
-#     backtesting = Backtesting(name_symbol='BTCUSDT', data_source='binance', name_strategy='chanlun',
-#                               timeframe_high='1w', timeframe_mid='12h', timeframe_low='1h',
-#                               function_high_timeframe='always_long',
-#                               function_mid_timeframe='chanlun',
-#                               function_low_timeframe='RSI_extreme_cross',
-#                               bt_start_date='2023-01-01 00:00:00+00:00',
-#                               bt_end_date='2023-12-09 00:00:00+00:00')
-#
-#     # Run the backtesting
-#     trading_decision = backtesting.run_backtesting_vectorize_high_low()
-#
-#     debug_logging(trading_decision)

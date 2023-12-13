@@ -1,4 +1,4 @@
-from objects.class_strategy import Strategy
+from Objects.strategy import Strategy
 
 strategy_chanlun_12h = Strategy(name_symbol='OPUSDT', data_source='binance', name_strategy='chanlun_12h',
                                 timeframe_high='1d', timeframe_mid='4h', timeframe_low='1h',
