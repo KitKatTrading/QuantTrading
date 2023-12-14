@@ -586,8 +586,8 @@ class KlineChart:
 
         candle = go.Candlestick(x=kline['dt'], open=kline["open"], high=kline["high"], low=kline["low"],
                                 close=kline["close"], text=kline["text"], name=name, showlegend=True,
-                                increasing_line_color=self.color_red, decreasing_line_color=self.color_green,
-                                increasing_fillcolor=self.color_red, decreasing_fillcolor=self.color_green, **kwargs)
+                                increasing_line_color=self.color_green, decreasing_line_color=self.color_red,
+                                increasing_fillcolor=self.color_green, decreasing_fillcolor=self.color_red, **kwargs)
         self.fig.add_trace(candle, row=1, col=1)
         self.fig.update_traces(xaxis="x1")
 
@@ -634,6 +634,39 @@ class KlineChart:
         for ma in ma_seq:
             self.add_scatter_indicator(df['dt'], df['close'].rolling(ma).mean(), name=f"MA{ma}",
                                        row=row, line_width=line_width, visible=visible, show_legend=True)
+
+    def add_rsi(self, kline: pd.DataFrame, row=3, **kwargs):
+        """绘制RSI图
+
+        函数执行逻辑：
+
+        1. 首先，复制输入的 kline 数据框到 df。
+        2. 获取自定义参数 rsi_periods，默认值为 14。
+        3. 使用 talib 库的 RSI 函数计算 RSI 值（rsi）。
+        4. 调用 add_scatter_indicator 方法将 rsi 绘制为折线图。传递以下参数：
+            - x: 日期时间数据
+            - y: rsi 数据
+            - name: 图例名称，为 "RSI"
+            - row: 指定要添加指标的子图行数，默认值为 3
+            - line_width: 线宽，默认值为 0.6
+            - show_legend: 是否显示图例，默认值为 False
+        5. 调用 add_line_indicator 方法将 rsi 绘制为水平线。传递以下参数：
+            - y: rsi 数据
+            - name: 图例名称，为 "RSI"
+            - row: 指定要添加指标的子图行数，默认值为 3
+            - line_width: 线宽，默认值为 0.6
+            - show_legend: 是否显示图例，默认值为 False
+        """
+        import talib
+        df = kline.copy()
+        rsi_periods = kwargs.get('rsi_periods', 14)
+        line_width = kwargs.get('line_width', 0.6)
+        rsi = talib.RSI(df['close'], timeperiod=rsi_periods)
+        rsi_21EMA = talib.EMA(rsi, timeperiod=21)
+        self.add_scatter_indicator(df['dt'], rsi, name="rsi", row=row,
+                                   line_color='white', show_legend=False, line_width=line_width)
+        self.add_scatter_indicator(df['dt'], rsi_21EMA, name="rsi_21EMA", row=row,
+                                   line_color='yellow', show_legend=False, line_width=line_width)
 
     def add_macd(self, kline: pd.DataFrame, row=3, **kwargs):
         """绘制MACD图

@@ -109,7 +109,7 @@ def find_hubs(df_PV_segments):
 
     for i in range(0, len(df_PV_segments) - 3):
 
-        print('Processing factor: ' + str(i))
+        # print('Processing factor: ' + str(i))
         if i < last_included_factor_idx:
             # Skip this iteration if it's part of an already processed hub
             continue
@@ -219,7 +219,7 @@ def find_hubs(df_PV_segments):
                         # debug_logging(f'Hub breaks at {factor_cur_idx}')
                         break
 
-    print(list_hubs)
+    # print(list_hubs)
     df_hubs = pd.DataFrame(list_hubs)
 
     # --- Visualization
@@ -245,7 +245,7 @@ def pattern_setup_trending_hubs_pull_back(df_hubs, cur_price):
     # Case 1 - the last hub is higher than the previous hub (up trend)
     msg = 'No valid setup'
     if hub_cur['low'] > hub_prev['high']:  # up trending hubs
-        if cur_price < hub_cur['high']:   # loose condition, if price lower than the current high, OK
+        if cur_price < hub_cur['low'] and cur_price > hub_prev['low']:  
             msg = 'Pullback long setup'
             return 1, msg  # pullback long setup
         else:
@@ -609,12 +609,14 @@ class CZSC:
 
         bi_list = self.bi_list
         df = pd.DataFrame(self.bars_raw)
-        kline = KlineChart(n_rows=3, title="{}-{}".format(self.symbol, self.freq))
+        kline = KlineChart(n_rows=4, title="{}-{}".format(self.symbol, self.freq))
         kline.add_kline(df, name="")
         # kline.add_sma(df, ma_seq=(5, 10, 21), row=1, visible=True, line_width=1.2)
         # kline.add_sma(df, ma_seq=(34, 55, 89, 144), row=1, visible=False, line_width=1.2)
         kline.add_vol(df, row=2)
         kline.add_macd(df, row=3)
+        kline.add_rsi(df, row=4)
+
 
         if len(bi_list) > 0:
             bi1 = [{'dt': x.fx_a.dt, "bi": x.fx_a.fx, "text": x.fx_a.mark.value} for x in bi_list]
@@ -756,6 +758,5 @@ def main(df_OHLC_mid,
     # plot using to_echarts
     chanlun.chart = chanlun.to_echarts()
     chanlun.chart = chanlun.to_plotly()
-    # chanlun.chart.show()
 
     return chanlun.decision, chanlun.chart
