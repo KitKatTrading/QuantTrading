@@ -2,8 +2,18 @@ import numpy as np
 import talib
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-
 from Utils.util_general import propagate_values
+
+""" 
+RSI-based extreme value and 6/12EMA cross strategy
+- First check for overbought and oversold conditions
+- Then check for death cross and golden cross (RSI 6EMA vs 12EMA)
+- Generate sell signals (-1) where there's an overbought condition and a death cross
+- Generate buy signals (1) where there's an oversold condition and a death cross
+- Combine the signals into a single column
+- Return the dataframe with the decision column
+"""
+
 
 def main(df_OHLC_low,
          RSI_overbought=65, RSI_oversold=35,

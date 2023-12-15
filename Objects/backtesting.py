@@ -83,6 +83,10 @@ class Backtesting:
     def __init__(self, name_symbol, data_source, name_strategy, timeframe_high, timeframe_mid, timeframe_low,
                  function_high_timeframe, function_mid_timeframe, function_low_timeframe,
                  bt_start_date, bt_end_date):
+        self.df_entry_log = None
+        self.df_OHLC_high = None
+        self.df_OHLC_mid = None
+        self.df_OHLC_low = None
         self.name_symbol = name_symbol
         self.data_source = data_source
         self.bt_start_date = bt_start_date
@@ -120,10 +124,10 @@ class Backtesting:
                                  function_low_timeframe=self.function_low_timeframe)
 
     def find_entries_vectorize_high_low(self,
-                                        manual_review_each_trade=False,
+                                        manual_review_each_trade,
                                         # trade_direction='long',
-                                        save_plots=True,
-                                        save_csv=False,
+                                        save_plots,
+                                        save_csv,
                                         ):
         """ Run the backtesting using vectorized high and low timeframe modules """
 
@@ -134,6 +138,7 @@ class Backtesting:
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_high + '.csv')
         df_OHLC_high = pd.read_csv(file_path, index_col=0)
         df_OHLC_high = df_OHLC_high.loc[self.bt_start_date: self.bt_end_date]
+        self.df_OHLC_high = df_OHLC_high
 
         # Vectorize the high timeframe directional module decisions
         df_decision_direction = self.strategy.strategy_high_timeframe.main(df_OHLC_high, run_mode='backtest')
@@ -145,24 +150,30 @@ class Backtesting:
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_mid + '.csv')
         df_OHLC_mid = pd.read_csv(file_path, index_col=0)
         df_OHLC_mid = df_OHLC_mid.loc[self.bt_start_date: self.bt_end_date]
+        self.df_OHLC_mid = df_OHLC_mid
 
         ### ENTRY MODULE
         # Load data
         file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_low + '.csv')
         df_OHLC_low = pd.read_csv(file_path, index_col=0)
         df_OHLC_low = df_OHLC_low.loc[self.bt_start_date: self.bt_end_date]
+        self.df_OHLC_low = df_OHLC_low
 
         # Vectorize the low timeframe entry module decisions
         df_decision_entry = self.strategy.strategy_low_timeframe.main(df_OHLC_low, run_mode='backtest')
-        # df_decision_entry_long = df_decision_entry.loc[df_decision_entry['decision'] == 1]
-        # df_decision_entry_short = df_decision_entry.loc[df_decision_entry['decision'] == -1]
+        df_decision_entry_long = df_decision_entry.loc[df_decision_entry['decision'] == 1]
+        df_decision_entry_short = df_decision_entry.loc[df_decision_entry['decision'] == -1]
 
         ### Output
-        # if save_csv:
-        #     # Save the csv for debugging
-        #     df_decision_entry.to_csv(os.path.join(self.backtesting_dir, 'decision_entry.csv'))
-        #     df_decision_entry_long.to_csv(os.path.join(self.backtesting_dir, 'df_decision_entry_long.csv'))
-        #     df_decision_entry_short.to_csv(os.path.join(self.backtesting_dir, 'df_decision_entry_short.csv'))
+        if save_csv:
+            # Save the csv for debugging
+            df_decision_entry.to_csv(os.path.join(self.backtesting_dir_strategy,
+                                                  f"df_decision_entry_{self.name_strategy}_{self.name_symbol}.csv"))
+            df_decision_entry_long.to_csv(os.path.join(self.backtesting_dir_strategy,
+                                                  f"df_decision_entry_long_{self.name_strategy}_{self.name_symbol}.csv"))
+            df_decision_entry_short.to_csv(os.path.join(self.backtesting_dir_strategy,
+                                                  f"df_decision_entry_short_{self.name_strategy}_{self.name_symbol}.csv"))
+
 
         ### ------------ Iterations for backtesting ------------ ###
         """ Since we have vectorized the entry module, we can now just loop through the identified entries exclusively"""
@@ -217,6 +228,8 @@ class Backtesting:
 
             # run specific pattern strategy
             df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe].copy()
+            # df_OHLC_mid_temp = df_OHLC_mid.copy()
+
             try:
                 decision_pattern, fig_hubs = (
                     self.strategy.strategy_mid_timeframe.main(
@@ -244,7 +257,6 @@ class Backtesting:
 
             # update the entry log if there is a valid final decision
             num_entry += 1
-
             new_row = {
                 'entry_number': num_entry,
                 'datetime_entry': cur_date_low_timeframe,
@@ -271,4 +283,67 @@ class Backtesting:
 
         # completed all entries, save the entry log
         df_entry_log.dropna(inplace=True)
-        df_entry_log.to_csv(os.path.join(self.backtesting_dir_strategy, f"df_entry_log_{self.name_strategy}_{self.name_symbol}.csv"))
+        df_entry_log.to_csv(os.path.join(self.backtesting_dir_strategy, f"df_final_entry_{self.name_strategy}_{self.name_symbol}.csv"))
+        self.df_entry_log = df_entry_log
+
+        return df_entry_log
+
+    def execute_trades(self, df_entry_log, save_csv):
+
+        for idx, row in tqdm(df_entry_log.iterrows(), total=len(df_entry_log)):
+            # Get the entry and exit prices
+            entry_price = row['entry_price']
+            entry_datetime = row['datetime_entry']
+            direction = row['direction']
+            exit_datetime = self.df_OHLC_low.index[self.df_OHLC_low.index.get_loc(entry_datetime) + 1]
+            exit_price = self.df_OHLC_low['Close'].loc[exit_datetime]
+
+            # Calculate the PnL
+            if direction == 'long':
+                pnl = exit_price - entry_price
+            elif direction == 'short':
+                pnl = entry_price - exit_price
+            else:
+                raise ValueError("Unsupported direction")
+
+            # Create the trade log object
+            trade_log = SingleTradeLog(symbol=self.name_symbol, name_strategy=self.name_strategy,
+                                       entry_datetime=entry_datetime, entry_price=entry_price,
+                                       exit_datetime=exit_datetime, exit_price=exit_price,
+                                       direction=direction, pnl=pnl)
+
+            # Save the trade log
+            if save_csv:
+                trade_log_df = pd.DataFrame(trade_log.__dict__, index=[0])
+                trade_log_df.to_csv(os.path.join(self.backtesting_dir_strategy,
+                                                 f"trade_log_{self.name_strategy}_{self.name_symbol}.csv"),
+                                    mode='a', header=False)
+            # Get the entry and exit prices
+            entry_price = row['entry_price']
+            entry_datetime = row['datetime_entry']
+            direction = row['direction']
+            exit_datetime = self.df_OHLC_low.index[self.df_OHLC_low.index.get_loc(entry_datetime) + 1]
+            exit_price = self.df_OHLC_low['Close'].loc[exit_datetime]
+
+            # Calculate the PnL
+            if direction == 'long':
+                pnl = exit_price - entry_price
+            elif direction == 'short':
+                pnl = entry_price - exit_price
+            else:
+                raise ValueError("Unsupported direction")
+
+            # Create the trade log object
+            trade_log = SingleTradeLog(symbol=self.name_symbol, name_strategy=self.name_strategy,
+                                       entry_datetime=entry_datetime, entry_price=entry_price,
+                                       exit_datetime=exit_datetime, exit_price=exit_price,
+                                       direction=direction, pnl=pnl)
+
+            # Save the trade log
+            if save_csv:
+                trade_log_df = pd.DataFrame(trade_log.__dict__, index=[0])
+                trade_log_df.to_csv(os.path.join(self.backtesting_dir_strategy,
+                                                 f"trade_log_{self.name_strategy}_{self.name_symbol}.csv"),
+                                    mode='a', header=False)
+
+

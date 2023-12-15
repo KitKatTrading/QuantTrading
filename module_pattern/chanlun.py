@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import plotly.graph_objs as go
+from datetime import datetime
 from typing import List
 from module_pattern.utils_chanlun.objects import BI, FX, RawBar, NewBar, BiHub
 from module_pattern.utils_chanlun.enum import Mark, Direction
@@ -170,54 +171,65 @@ def find_hubs(df_PV_segments):
                     factor_cur_idx = df_PV_segments.index[j]
                     factor_cur_type = df_PV_segments.iloc[j]['pv_type']
 
-                    # if the current factor belongs to the current hub, then update the hub
-                    if check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
+                    # first check if the current factor is part of the current hub
+                    if j == len(df_PV_segments) - 1:
+
+                        # if the current factor is the last factor, then it belongs to the current hub
                         cur_hub['end_idx'] = factor_cur_idx
                         cur_hub['num_segments'] += 1
                         cur_hub['all_idx'].append(factor_cur_idx)
 
-                    else:
-                        # hub breaks
-                        in_hub = False
-
-                        # check where the hub should break based on the hub direction
-                        if cur_hub_direction == 'down':
-                            if factor_cur_type == 'Valley':
-                                # down hub should end at peak, so drop the last factor
-                                cur_hub['end_idx'] = df_PV_segments.index[j - 3]
-                                cur_hub['num_segments'] -= 2
-                                last_included_factor_idx = j - 1
-                            elif factor_cur_type == 'Peak':
-                                cur_hub['end_idx'] = df_PV_segments.index[j - 2]
-                                cur_hub['num_segments'] -= 1
-                                last_included_factor_idx = j - 1
-                        elif cur_hub_direction == 'up':
-                            if factor_cur_type == 'Peak':
-                                # up hub should end at valley, so drop the last factor
-                                cur_hub['end_idx'] = df_PV_segments.index[j - 3]
-                                cur_hub['num_segments'] -= 2
-                                last_included_factor_idx = j - 1
-                            elif factor_cur_type == 'Valley':
-                                cur_hub['end_idx'] = df_PV_segments.index[j - 2]
-                                cur_hub['num_segments'] -= 1
-                                last_included_factor_idx = j - 1
-
-                        # if less than 3 lines in hub
-                        if cur_hub['num_segments'] <= 2:
-                            # hub not valid
-                            break
-                        else:
-                            # append the hub and break
-                            list_hubs.append(cur_hub)
-                            break
-
-                    # case if it is the last factor
-                    if j == len(df_PV_segments) - 1:
+                        # manually close the hub
                         in_hub = False
                         list_hubs.append(cur_hub)
                         last_included_factor_idx = j
                         # debug_logging(f'Hub breaks at {factor_cur_idx}')
                         break
+
+                    else:
+                        # if the current factor belongs to the current hub, then update the hub
+                        if check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
+                            cur_hub['end_idx'] = factor_cur_idx
+                            cur_hub['num_segments'] += 1
+                            cur_hub['all_idx'].append(factor_cur_idx)
+
+
+                        else:
+                            # hub breaks
+                            in_hub = False
+
+                            # check where the hub should break based on the hub direction
+                            if cur_hub_direction == 'down':
+                                if factor_cur_type == 'Valley':
+                                    # down hub should end at peak, so drop the last factor
+                                    cur_hub['end_idx'] = df_PV_segments.index[j - 3]
+                                    cur_hub['num_segments'] -= 2
+                                    last_included_factor_idx = j - 1
+                                elif factor_cur_type == 'Peak':
+                                    cur_hub['end_idx'] = df_PV_segments.index[j - 2]
+                                    cur_hub['num_segments'] -= 1
+                                    last_included_factor_idx = j - 1
+                            elif cur_hub_direction == 'up':
+                                if factor_cur_type == 'Peak':
+                                    # up hub should end at valley, so drop the last factor
+                                    cur_hub['end_idx'] = df_PV_segments.index[j - 3]
+                                    cur_hub['num_segments'] -= 2
+                                    last_included_factor_idx = j - 1
+                                elif factor_cur_type == 'Valley':
+                                    cur_hub['end_idx'] = df_PV_segments.index[j - 2]
+                                    cur_hub['num_segments'] -= 1
+                                    last_included_factor_idx = j - 1
+
+                            # if less than 3 lines in hub
+                            if cur_hub['num_segments'] <= 2:
+                                # hub not valid
+                                break
+                            else:
+                                # append the hub and break
+                                list_hubs.append(cur_hub)
+                                break
+
+
 
     # print(list_hubs)
     df_hubs = pd.DataFrame(list_hubs)
@@ -230,7 +242,7 @@ def find_hubs(df_PV_segments):
 
     return df_hubs
 
-def pattern_setup_trending_hubs_pull_back(df_hubs, cur_price):
+def pattern_setup_trending_hubs_pull_back(df_hubs, cur_datetime, cur_price):
     """ This function identifies the pullback trading setup for trending hubs"""
 
     # Extract the last two hubs
@@ -240,19 +252,24 @@ def pattern_setup_trending_hubs_pull_back(df_hubs, cur_price):
         hub_cur = df_hubs.iloc[-1]
         hub_prev = df_hubs.iloc[-2]
 
+    # Check if the current candle is in the last hub (in terms of time)
+    cur_datetime_dt = datetime.strptime(cur_datetime, '%Y-%m-%d %H:%M:%S+00:00')
+    hub_cur_end_dt = datetime.strptime(hub_cur.end_idx, '%Y-%m-%d %H:%M:%S+00:00')
+    if cur_datetime_dt > hub_cur_end_dt:
+        return 0, 'No valid setup'
 
     # --- Check the relation between the two hubs
     # Case 1 - the last hub is higher than the previous hub (up trend)
     msg = 'No valid setup'
     if hub_cur['low'] > hub_prev['high']:  # up trending hubs
-        if cur_price < hub_cur['low'] and cur_price > hub_prev['low']:  
+        if cur_price < hub_cur['low'] and cur_price > hub_prev['low']:
             msg = 'Pullback long setup'
             return 1, msg  # pullback long setup
         else:
             return 0, msg  # no valid setup
     # Case 2 - the last hub is lower than the previous one (down trend)
     elif hub_cur['high'] < hub_prev['low']:  # down trending hubs
-        if cur_price > hub_cur['low']:  # loose condition, if price higher than the current low, OK
+        if cur_price > hub_cur['high'] and cur_price < hub_prev['high']:
             msg = 'Pullback short setup'
             return -1, msg  # pullback short setup
         else:
@@ -478,7 +495,8 @@ class CZSC:
 
         # identify trading pattern
         cur_price = bars[-1].close
-        decision, msg = pattern_setup_trending_hubs_pull_back(df_hubs, cur_price)
+        cur_datetime = bars[-1].dt
+        decision, msg = pattern_setup_trending_hubs_pull_back(df_hubs, cur_datetime, cur_price)
         self.decision = decision
         self.msg = msg
 
