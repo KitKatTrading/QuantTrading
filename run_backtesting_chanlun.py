@@ -8,8 +8,9 @@ if __name__ == '__main__':
     datetime_now_rounded = datetime_now_rounded.strftime("%Y-%m-%d %H:%M:%S+00:00")
 
     # define the list of names and symbols
-    names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT']
-    names_symbol = ['EGLDUSDT', 'AVAXUSDT']
+    names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'INJUSDT', 'OPUSDT']
+    # names_symbol = ['EGLDUSDT', 'AVAXUSDT']
+    # names_symbol = ['EGLDUSDT']
 
     for name_symbol in names_symbol:
         print(f"Processing {name_symbol}:")
@@ -20,8 +21,9 @@ if __name__ == '__main__':
                                   function_high_timeframe='always_long',
                                   function_mid_timeframe='chanlun',
                                   function_low_timeframe='RSI_extreme_cross',
-                                  bt_start_date='2023-01-01 00:00:00+00:00',
-                                  bt_end_date=datetime_now_rounded)
+                                  bt_start_date='2021-01-01 00:00:00+00:00',
+                                  # bt_end_date=datetime_now_rounded)
+                                  bt_end_date='2023-12-01 00:00:00+00:00')
 
         # Identify the entries
         print("-- identifying entries...")
@@ -31,6 +33,6 @@ if __name__ == '__main__':
 
         # Execute the trades
         print("-- executing trades...")
-        df_bt_result = backtesting.execute_trades(dffinal_entry=df_entry_log, save_csv=True)
+        df_bt_result = backtesting.execute_trades(save_csv=True)
 
 

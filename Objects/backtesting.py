@@ -62,7 +62,7 @@ def check_single_trade_outcome(df_OHLC_low, entry_datetime, entry_price, directi
 
     return pnl
 
-class SingleTradeLog:
+class SingleTrade:
     """ A class to represent a single trade """
     def __init__(self, symbol, name_strategy, entry_datetime, entry_price, exit_datetime, exit_price, direction, pnl):
         self.symbol = symbol
@@ -83,10 +83,7 @@ class Backtesting:
     def __init__(self, name_symbol, data_source, name_strategy, timeframe_high, timeframe_mid, timeframe_low,
                  function_high_timeframe, function_mid_timeframe, function_low_timeframe,
                  bt_start_date, bt_end_date):
-        self.df_entry_log = None
-        self.df_OHLC_high = None
-        self.df_OHLC_mid = None
-        self.df_OHLC_low = None
+
         self.name_symbol = name_symbol
         self.data_source = data_source
         self.bt_start_date = bt_start_date
@@ -98,6 +95,11 @@ class Backtesting:
         self.function_high_timeframe = function_high_timeframe
         self.function_mid_timeframe = function_mid_timeframe
         self.function_low_timeframe = function_low_timeframe
+        self.df_trade_log = None
+        self.df_entry_log = None
+        self.df_OHLC_high = None
+        self.df_OHLC_mid = None
+        self.df_OHLC_low = None
 
         # Set data directory based on data source
         if self.data_source == 'binance':
@@ -105,6 +107,7 @@ class Backtesting:
 
         # Set backtesting directory - use the current date as the backtesting directory name
         datetime_now_str = datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.datetime_now_str = datetime_now_str
         self.dir_backtesting = dir_backtesting
         self.backtesting_dir_strategy = os.path.join(dir_backtesting, f"{name_strategy}")
         self.backtesting_dir_symbol = os.path.join(self.backtesting_dir_strategy, f"{name_symbol}_{datetime_now_str}")
@@ -218,12 +221,12 @@ class Backtesting:
             ### PATTERN MODULE
             # convert dataframe
             cur_date_mid_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_mid)
-            if self.timeframe_mid in ["12h", "8h", "4h", "2h", "1h"]:
-                hours_offset_mid = int(self.timeframe_mid[:-1])
-                cur_date_mid_timeframe = cur_date_mid_timeframe - timedelta(hours=hours_offset_mid)
-            elif self.timeframe_mid in ["30m", "15m", "5m", "1m"]:
-                hours_offset_mid = 0
-            cur_date_mid_timeframe = cur_date_mid_timeframe - timedelta(hours=hours_offset_mid)
+            # if self.timeframe_mid in ["12h", "8h", "4h", "2h", "1h"]:
+            #     hours_offset_mid = int(self.timeframe_mid[:-1])
+            #     cur_date_mid_timeframe = cur_date_mid_timeframe - timedelta(hours=hours_offset_mid)
+            # elif self.timeframe_mid in ["30m", "15m", "5m", "1m"]:
+            #     hours_offset_mid = 0
+            # cur_date_mid_timeframe = cur_date_mid_timeframe - timedelta(hours=hours_offset_mid)
             cur_date_mid_timeframe = cur_date_mid_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
             # run specific pattern strategy
@@ -288,62 +291,158 @@ class Backtesting:
 
         return df_entry_log
 
-    def execute_trades(self, df_entry_log, save_csv):
+    def check_single_trade_trailing_stop(self,
+                                         df_OHLC_low_forward_temp,
+                                         entry_price,
+                                         direction,
+                                         initial_risk,
+                                         trailing_target_initial_multiple):
+        """
+        This function evaluates the outcome of one signal trade with the given entry and initial stop loss amount
+        and returns the exit price and exit datetime. With price going in the anticipated direction and achieving
+        multiples of the initial stop loss amount, the stop loss will be updated to go along with the price.
+        """
 
+        ### case for long trades
+        if direction == 'long':
+
+            # initialize the trailing stop and target
+            trailing_stop = entry_price - initial_risk
+            trailing_target = entry_price + initial_risk * trailing_target_initial_multiple
+            max_profit = entry_price  ### this tracks the maximum profit potential
+
+            # loop through the forward dataframe
+            for idx, row in df_OHLC_low_forward_temp.iterrows():
+
+                    # get the current price
+                    cur_high = row['High']
+                    cur_low = row['Low']
+
+                    # update the max profit
+                    if cur_high > max_profit:
+                        max_profit = cur_high
+
+                    # check if the stop loss is triggered (first this one to be conservative)
+                    if cur_low < trailing_stop:
+                        # exit the trade
+                        exit_price = trailing_stop
+                        exit_datetime = idx
+                        break
+
+                    # otherwise, check if the current price is above the trailing target
+                    if cur_high > trailing_target:
+                        # update the trailing stop and target
+                        trailing_stop += initial_risk
+                        trailing_target += initial_risk
+
+            return exit_price, exit_datetime, max_profit
+
+        ### case for short trades
+        # TODO - this needs to be verified
+        elif direction == 'short':
+
+                # initialize the trailing stop and target
+                trailing_stop = entry_price + initial_risk
+                trailing_target = entry_price - initial_risk * trailing_target_initial_multiple
+                max_profit = entry_price  ### this tracks the maximum profit potential
+
+                # loop through the forward dataframe
+                for idx, row in df_OHLC_low_forward_temp.iterrows():
+
+                    # get the current price
+                    cur_high = row['High']
+                    cur_low = row['Low']
+
+                    # update the max profit
+                    if cur_low < max_profit:
+                        max_profit = cur_low
+
+                    # check if the stop loss is triggered (first this one to be conservative)
+                    if cur_high > trailing_stop:
+                        # exit the trade
+                        exit_price = trailing_stop
+                        exit_datetime = idx
+                        break
+
+                    # otherwise, check if the current price is above the trailing target
+                    if cur_low < trailing_target:
+                        # update the trailing stop and target
+                        trailing_stop -= initial_risk
+                        trailing_target -= initial_risk
+
+                return exit_price, exit_datetime, max_profit
+
+    def execute_trades(self,
+                       df_entry_log=None,
+                       stop_type="recent_pivot",
+                       profit_type='trailing_stop',
+                       save_csv=True):
+
+        # initialize dataframe for trade entries
+        if df_entry_log is None:
+            df_entry_log = self.df_entry_log
+
+        # initialize dataframe for trade results
+        df_trade_log = pd.DataFrame(columns=['entry_number', 'direction',
+                                             'datetime_entry', 'entry_price', 'initial_risk',
+                                             'datetime_exit', 'exit_price', 'max_profit'])
+
+        # loop through the entries
         for idx, row in tqdm(df_entry_log.iterrows(), total=len(df_entry_log)):
-            # Get the entry and exit prices
+
+            # Get the entry information
             entry_price = row['entry_price']
             entry_datetime = row['datetime_entry']
             direction = row['direction']
-            exit_datetime = self.df_OHLC_low.index[self.df_OHLC_low.index.get_loc(entry_datetime) + 1]
-            exit_price = self.df_OHLC_low['Close'].loc[exit_datetime]
+            entry_idx = self.df_OHLC_low.index.get_loc(entry_datetime)
 
-            # Calculate the PnL
-            if direction == 'long':
-                pnl = exit_price - entry_price
-            elif direction == 'short':
-                pnl = entry_price - exit_price
+            # Get the initial stop loss
+            if stop_type == "recent_pivot":
+                # get recent 5 candles
+                df_OHLC_low_temp = self.df_OHLC_low.iloc[entry_idx-5:entry_idx+1].copy()
+                if direction == 'long':
+                    initial_stop = df_OHLC_low_temp['Low'].min()
+                elif direction == 'short':
+                    initial_stop = df_OHLC_low_temp['High'].max()
+                initial_risk = abs(entry_price - initial_stop)
             else:
-                raise ValueError("Unsupported direction")
+                raise ValueError("Unsupported stop type")
 
-            # Create the trade log object
-            trade_log = SingleTradeLog(symbol=self.name_symbol, name_strategy=self.name_strategy,
-                                       entry_datetime=entry_datetime, entry_price=entry_price,
-                                       exit_datetime=exit_datetime, exit_price=exit_price,
-                                       direction=direction, pnl=pnl)
+            # Calculate the exit information
+            df_OHLC_low_forward_temp = self.df_OHLC_low.loc[entry_datetime:].copy()
+            if profit_type == 'trailing_stop':
+                exit_price, exit_datetime, max_profit = self.check_single_trade_trailing_stop(df_OHLC_low_forward_temp,
+                                                                                  entry_price, direction, initial_risk,
+                                                                                  trailing_target_initial_multiple=1)
+            # udpate the trade results dataframe
+            new_row = {
+                'entry_number': idx,
+                'direction': direction,
+                'datetime_entry': entry_datetime,
+                'entry_price': entry_price,
+                'initial_risk': initial_risk,
+                'datetime_exit': exit_datetime,
+                'exit_price': exit_price,
+                'max_profit': max_profit
+            }
 
-            # Save the trade log
-            if save_csv:
-                trade_log_df = pd.DataFrame(trade_log.__dict__, index=[0])
-                trade_log_df.to_csv(os.path.join(self.backtesting_dir_strategy,
-                                                 f"trade_log_{self.name_strategy}_{self.name_symbol}.csv"),
-                                    mode='a', header=False)
-            # Get the entry and exit prices
-            entry_price = row['entry_price']
-            entry_datetime = row['datetime_entry']
-            direction = row['direction']
-            exit_datetime = self.df_OHLC_low.index[self.df_OHLC_low.index.get_loc(entry_datetime) + 1]
-            exit_price = self.df_OHLC_low['Close'].loc[exit_datetime]
+            # expand the dataframe
+            df_trade_log = pd.concat([df_trade_log, pd.DataFrame(new_row, index=[idx])])
 
-            # Calculate the PnL
-            if direction == 'long':
-                pnl = exit_price - entry_price
-            elif direction == 'short':
-                pnl = entry_price - exit_price
-            else:
-                raise ValueError("Unsupported direction")
+        # calculate the trading statistics
+        df_trade_log['pnl'] = df_trade_log['exit_price'] - df_trade_log['entry_price']
+        df_trade_log['pnl_max'] = df_trade_log['max_profit'] - df_trade_log['entry_price']
+        df_trade_log['rrr'] = df_trade_log['pnl'] / df_trade_log['initial_risk']
+        df_trade_log['rrr_max'] = df_trade_log['pnl_max'] / df_trade_log['initial_risk']
 
-            # Create the trade log object
-            trade_log = SingleTradeLog(symbol=self.name_symbol, name_strategy=self.name_strategy,
-                                       entry_datetime=entry_datetime, entry_price=entry_price,
-                                       exit_datetime=exit_datetime, exit_price=exit_price,
-                                       direction=direction, pnl=pnl)
+        # calculate the win rate - win (W), loss (L) or breakeven (E)
+        df_trade_log['win_loss'] = df_trade_log['rrr'].apply(lambda x: 'W' if x > 0.01 else ('L' if x < -0.01 else 'E'))
 
-            # Save the trade log
-            if save_csv:
-                trade_log_df = pd.DataFrame(trade_log.__dict__, index=[0])
-                trade_log_df.to_csv(os.path.join(self.backtesting_dir_strategy,
-                                                 f"trade_log_{self.name_strategy}_{self.name_symbol}.csv"),
-                                    mode='a', header=False)
+
+        # save the trade log
+        self.df_trade_log = df_trade_log
+        if save_csv:
+            df_trade_log.to_csv(os.path.join(self.backtesting_dir_strategy,
+                                             f"df_trade_log_{self.name_strategy}_{self.name_symbol}.csv"))
 
 

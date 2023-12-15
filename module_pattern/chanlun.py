@@ -500,12 +500,6 @@ class CZSC:
         self.decision = decision
         self.msg = msg
 
-        # # plot using to_echarts
-        # self.chart = self.to_echarts()
-        # self.chart = self.to_plotly()
-        # self.chart.show()
-
-
     def __repr__(self):
         return "<CZSC~{}~{}>".format(self.symbol, self.freq.value)
 
