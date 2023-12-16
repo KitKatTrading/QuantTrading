@@ -277,7 +277,7 @@ class Backtesting:
             # save the html plot
             if save_plots:
                 fig_hubs.write_html(os.path.join(self.backtesting_dir_symbol,
-                                                 f"Entry_{num_entry}_{self.name_strategy}_{self.name_symbol}.html"))
+                                                 f"Entry_{num_entry}_setup.html"))
 
             # if need to manually review each plot:
             if manual_review_each_trade:
@@ -377,7 +377,7 @@ class Backtesting:
         if make_plot:
 
             # some temp variables
-            num_candles_before_entry = 20
+            num_candles_before_entry = 0
             num_candles_after_exit = 100
 
 
@@ -477,12 +477,6 @@ class Backtesting:
             df_trade_log = pd.concat([df_trade_log, pd.DataFrame(new_row, index=[idx])])
 
         ### Post-trade summary
-        # save the trade log
-        self.df_trade_log = df_trade_log
-        if save_csv:
-            df_trade_log.to_csv(os.path.join(self.backtesting_dir_strategy,
-                                             f"df_trade_log_{self.name_strategy}_{self.name_symbol}.csv"))
-
         # pnl analysis
         df_trade_log['pnl'] = df_trade_log['exit_price'] - df_trade_log['entry_price']
         df_trade_log['pnl_max'] = df_trade_log['max_profit'] - df_trade_log['entry_price']
@@ -490,6 +484,12 @@ class Backtesting:
         df_trade_log['rrr_max'] = df_trade_log['pnl_max'] / df_trade_log['initial_risk']
         df_trade_log['duration'] = df_trade_log['exit_idx'] - df_trade_log['entry_idx']
         df_trade_log['win_loss'] = df_trade_log['rrr'].apply(lambda x: 'W' if x > 0.01 else ('L' if x < -0.01 else 'E'))
+
+        # save the trade log
+        self.df_trade_log = df_trade_log
+        if save_csv:
+            df_trade_log.to_csv(os.path.join(self.backtesting_dir_strategy,
+                                             f"df_trade_log_{self.name_strategy}_{self.name_symbol}.csv"))
 
         return df_trade_log
 

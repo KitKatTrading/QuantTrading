@@ -26,7 +26,7 @@ if __name__ == '__main__':
                     'CELRUSDT', 'OGNUSDT', 'REEFUSDT', 'DENTUSDT', 'RVNUSDT', 'DODOUSDT', 'HNTUSDT', 'TOMOUSDT',
                     'LITUSDT', 'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'HOTUSDT', 'NKNUSDT',
                     'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
-    names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'INJUSDT', 'OPUSDT']
+    # names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'INJUSDT', 'OPUSDT']
     # names_symbol = ['EGLDUSDT']
 
     # initialize master dataframe for all symbols
@@ -42,7 +42,7 @@ if __name__ == '__main__':
                                   function_high_timeframe=name_strategy_high_timeframe,
                                   function_mid_timeframe=name_strategy_mid_timeframe,
                                   function_low_timeframe=name_strategy_low_timeframe,
-                                  bt_start_date='2023-01-01 00:00:00+00:00',
+                                  bt_start_date='2021-01-01 00:00:00+00:00',
                                   bt_end_date=datetime_now_rounded)
                                   # bt_end_date='2023-07-01 00:00:00+00:00')
 
