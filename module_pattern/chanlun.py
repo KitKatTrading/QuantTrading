@@ -629,7 +629,6 @@ class CZSC:
         kline.add_macd(df, row=3)
         kline.add_rsi(df, row=4)
 
-
         if len(bi_list) > 0:
             bi1 = [{'dt': x.fx_a.dt, "bi": x.fx_a.fx, "text": x.fx_a.mark.value} for x in bi_list]
             bi2 = [{'dt': bi_list[-1].fx_b.dt, "bi": bi_list[-1].fx_b.fx, "text": bi_list[-1].fx_b.mark.value[0]}]
@@ -644,7 +643,6 @@ class CZSC:
         # Loop through each bi_hub and add rectangles
         for idx in range(len(self.df_bi_hubs)):
             bi_hub = self.df_bi_hubs.iloc[idx]
-
 
             try:
                 rect = go.layout.Shape(
@@ -663,7 +661,6 @@ class CZSC:
 
         # Update the figure with the new shapes
         kline.fig.update_layout(shapes=existing_shapes)
-
 
         return kline.fig
 
@@ -761,7 +758,7 @@ def main(df_OHLC_mid,
     df_OHLC_mid = df_OHLC_mid[-num_candles:]
     bars = convert_df_to_bars(df_OHLC_mid, time_frame, name_symbol)
 
-    # initilize the ChanAnalysis object
+    # initialize the Chan Analysis object
     chanlun = CZSC(bars,
                    symbol=name_symbol,
                    freq=time_frame,

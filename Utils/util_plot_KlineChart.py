@@ -10,6 +10,7 @@ from plotly import graph_objects as go
 from plotly.subplots import make_subplots
 
 
+
 def SMA(close: np.array, timeperiod=5):
     """简单移动平均
 

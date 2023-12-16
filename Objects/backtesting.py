@@ -130,7 +130,7 @@ class Backtesting:
                                         manual_review_each_trade,
                                         # trade_direction='long',
                                         save_plots,
-                                        save_csv,
+                                        save_csv=False,
                                         ):
         """ Run the backtesting using vectorized high and low timeframe modules """
 
@@ -294,9 +294,12 @@ class Backtesting:
     def check_single_trade_trailing_stop(self,
                                          df_OHLC_low_forward_temp,
                                          entry_price,
+                                         entry_datetime,
                                          direction,
                                          initial_risk,
-                                         trailing_target_initial_multiple):
+                                         trailing_target_initial_multiple,
+                                         make_plot=False,
+                                         ):
         """
         This function evaluates the outcome of one signal trade with the given entry and initial stop loss amount
         and returns the exit price and exit datetime. With price going in the anticipated direction and achieving
@@ -335,8 +338,6 @@ class Backtesting:
                         trailing_stop += initial_risk
                         trailing_target += initial_risk
 
-            return exit_price, exit_datetime, max_profit
-
         ### case for short trades
         # TODO - this needs to be verified
         elif direction == 'short':
@@ -370,7 +371,45 @@ class Backtesting:
                         trailing_stop -= initial_risk
                         trailing_target -= initial_risk
 
-                return exit_price, exit_datetime, max_profit
+            ### use kline pro to plot the trade
+
+        ### if need to make plot
+        if make_plot:
+
+            # some temp variables
+            num_candles_before_entry = 20
+            num_candles_after_exit = 100
+
+
+            # get the dataframe for single trade history
+            entry_idx = self.df_OHLC_low.index.get_loc(entry_datetime)
+            exit_idx = self.df_OHLC_low.index.get_loc(exit_datetime)
+            if exit_idx + num_candles_after_exit > len(self.df_OHLC_low):
+                df_single_trade = self.df_OHLC_low.iloc[entry_idx - num_candles_before_entry:].copy()
+            else:
+                df_single_trade = self.df_OHLC_low.iloc[entry_idx - num_candles_before_entry: exit_idx + num_candles_after_exit].copy()
+
+            # rename the columns (Datetime -> dt, Open -> open, etc.)
+            df_single_trade.reset_index(inplace=True)
+            df_single_trade['dt'] = df_single_trade['Date']
+            df_single_trade['open'] = df_single_trade['Open']
+            df_single_trade['high'] = df_single_trade['High']
+            df_single_trade['low'] = df_single_trade['Low']
+            df_single_trade['close'] = df_single_trade['Close']
+            df_single_trade['vol'] = df_single_trade['Volume']
+            if 'text' not in df_single_trade.columns:
+                df_single_trade['text'] = ""
+
+            # now draw the plot
+            from Utils.util_plot_KlineChart import KlineChart
+            kline = KlineChart(n_rows=4, title="{}-{}".format(self.name_symbol, self.timeframe_low))
+            kline.add_kline(df_single_trade, name="")
+            kline.add_vol(df_single_trade, row=2)
+
+            return exit_price, exit_datetime, max_profit, kline.fig
+
+        else:
+            return exit_price, exit_datetime, max_profit, []
 
     def execute_trades(self,
                        df_entry_log=None,
@@ -382,10 +421,11 @@ class Backtesting:
         if df_entry_log is None:
             df_entry_log = self.df_entry_log
 
+        ### Trade execution
         # initialize dataframe for trade results
         df_trade_log = pd.DataFrame(columns=['entry_number', 'direction',
-                                             'datetime_entry', 'entry_price', 'initial_risk',
-                                             'datetime_exit', 'exit_price', 'max_profit'])
+                                             'datetime_entry', 'entry_idx', 'entry_price', 'initial_risk',
+                                             'datetime_exit', 'exit_idx', 'exit_price', 'max_profit'])
 
         # loop through the entries
         for idx, row in tqdm(df_entry_log.iterrows(), total=len(df_entry_log)):
@@ -411,17 +451,24 @@ class Backtesting:
             # Calculate the exit information
             df_OHLC_low_forward_temp = self.df_OHLC_low.loc[entry_datetime:].copy()
             if profit_type == 'trailing_stop':
-                exit_price, exit_datetime, max_profit = self.check_single_trade_trailing_stop(df_OHLC_low_forward_temp,
-                                                                                  entry_price, direction, initial_risk,
-                                                                                  trailing_target_initial_multiple=1)
+                exit_price, exit_datetime, max_profit, fig_single_trade \
+                    = self.check_single_trade_trailing_stop(df_OHLC_low_forward_temp, entry_price, entry_datetime,
+                                                            direction, initial_risk, trailing_target_initial_multiple=2,
+                                                            make_plot=True,
+                                                            )
+            fig_single_trade.write_html(os.path.join(self.backtesting_dir_symbol,
+                                                     f"Entry_{idx}_execution.html"))
+
             # udpate the trade results dataframe
             new_row = {
                 'entry_number': idx,
                 'direction': direction,
                 'datetime_entry': entry_datetime,
                 'entry_price': entry_price,
+                'entry_idx': entry_idx,
                 'initial_risk': initial_risk,
                 'datetime_exit': exit_datetime,
+                'exit_idx': self.df_OHLC_low.index.get_loc(exit_datetime),
                 'exit_price': exit_price,
                 'max_profit': max_profit
             }
@@ -429,20 +476,20 @@ class Backtesting:
             # expand the dataframe
             df_trade_log = pd.concat([df_trade_log, pd.DataFrame(new_row, index=[idx])])
 
-        # calculate the trading statistics
-        df_trade_log['pnl'] = df_trade_log['exit_price'] - df_trade_log['entry_price']
-        df_trade_log['pnl_max'] = df_trade_log['max_profit'] - df_trade_log['entry_price']
-        df_trade_log['rrr'] = df_trade_log['pnl'] / df_trade_log['initial_risk']
-        df_trade_log['rrr_max'] = df_trade_log['pnl_max'] / df_trade_log['initial_risk']
-
-        # calculate the win rate - win (W), loss (L) or breakeven (E)
-        df_trade_log['win_loss'] = df_trade_log['rrr'].apply(lambda x: 'W' if x > 0.01 else ('L' if x < -0.01 else 'E'))
-
-
+        ### Post-trade summary
         # save the trade log
         self.df_trade_log = df_trade_log
         if save_csv:
             df_trade_log.to_csv(os.path.join(self.backtesting_dir_strategy,
                                              f"df_trade_log_{self.name_strategy}_{self.name_symbol}.csv"))
 
+        # pnl analysis
+        df_trade_log['pnl'] = df_trade_log['exit_price'] - df_trade_log['entry_price']
+        df_trade_log['pnl_max'] = df_trade_log['max_profit'] - df_trade_log['entry_price']
+        df_trade_log['rrr'] = df_trade_log['pnl'] / df_trade_log['initial_risk']
+        df_trade_log['rrr_max'] = df_trade_log['pnl_max'] / df_trade_log['initial_risk']
+        df_trade_log['duration'] = df_trade_log['exit_idx'] - df_trade_log['entry_idx']
+        df_trade_log['win_loss'] = df_trade_log['rrr'].apply(lambda x: 'W' if x > 0.01 else ('L' if x < -0.01 else 'E'))
+
+        return df_trade_log
 
