@@ -62,22 +62,6 @@ def check_single_trade_outcome(df_OHLC_low, entry_datetime, entry_price, directi
 
     return pnl
 
-class SingleTrade:
-    """ A class to represent a single trade """
-    def __init__(self, symbol, name_strategy, entry_datetime, entry_price, exit_datetime, exit_price, direction, pnl):
-        self.symbol = symbol
-        self.name_strategy = name_strategy
-        self.entry_datetime = entry_datetime
-        self.entry_price = entry_price
-        self.exit_datetime = exit_datetime
-        self.exit_price = exit_price
-        self.direction = direction
-        self.pnl = pnl
-
-    def __str__(self):
-        return f"entry_datetime = {self.entry_datetime}, entry_price = {self.entry_price}, exit_datetime = {self.exit_datetime}, exit_price = {self.exit_price}, direction = {self.direction}, pnl = {self.pnl}"
-
-
 class Backtesting:
 
     def __init__(self, name_symbol, data_source, name_strategy, timeframe_high, timeframe_mid, timeframe_low,
@@ -109,8 +93,8 @@ class Backtesting:
         datetime_now_str = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.datetime_now_str = datetime_now_str
         self.dir_backtesting = dir_backtesting
-        self.backtesting_dir_strategy = os.path.join(dir_backtesting, f"{name_strategy}")
-        self.backtesting_dir_symbol = os.path.join(self.backtesting_dir_strategy, f"{name_symbol}_{datetime_now_str}")
+        self.backtesting_dir_strategy = os.path.join(dir_backtesting, self.name_strategy)
+        self.backtesting_dir_symbol = os.path.join(self.backtesting_dir_strategy, f"{name_symbol}")
         if not os.path.exists(self.dir_backtesting):
             os.makedirs(self.dir_backtesting)
         if not os.path.exists(self.backtesting_dir_strategy):
@@ -126,6 +110,125 @@ class Backtesting:
                                  function_mid_timeframe=self.function_mid_timeframe,
                                  function_low_timeframe=self.function_low_timeframe)
 
+    def check_single_trade_trailing_stop(self,
+                                         df_OHLC_low_forward_temp,
+                                         entry_price,
+                                         entry_datetime,
+                                         direction,
+                                         initial_risk,
+                                         trailing_target_initial_multiple,
+                                         make_plot=False,
+                                         ):
+        """
+        This function evaluates the outcome of one signal trade with the given entry and initial stop loss amount
+        and returns the exit price and exit datetime. With price going in the anticipated direction and achieving
+        multiples of the initial stop loss amount, the stop loss will be updated to go along with the price.
+        """
+
+        ### case for long trades
+        if direction == 'long':
+
+            # initialize the trailing stop and target
+            trailing_stop = entry_price - initial_risk
+            trailing_target = entry_price + initial_risk * trailing_target_initial_multiple
+            max_profit = entry_price  ### this tracks the maximum profit potential
+
+            # loop through the forward dataframe
+            for idx, row in df_OHLC_low_forward_temp.iterrows():
+
+                    # get the current price
+                    cur_high = row['High']
+                    cur_low = row['Low']
+
+                    # update the max profit
+                    if cur_high > max_profit:
+                        max_profit = cur_high
+
+                    # check if the stop loss is triggered (first this one to be conservative)
+                    if cur_low < trailing_stop:
+                        # exit the trade
+                        exit_price = trailing_stop
+                        exit_datetime = idx
+                        break
+
+                    # otherwise, check if the current price is above the trailing target
+                    if cur_high > trailing_target:
+                        # update the trailing stop and target
+                        trailing_stop += initial_risk
+                        trailing_target += initial_risk
+
+        ### case for short trades
+        # TODO - this needs to be verified
+        elif direction == 'short':
+
+                # initialize the trailing stop and target
+                trailing_stop = entry_price + initial_risk
+                trailing_target = entry_price - initial_risk * trailing_target_initial_multiple
+                max_profit = entry_price  ### this tracks the maximum profit potential
+
+                # loop through the forward dataframe
+                for idx, row in df_OHLC_low_forward_temp.iterrows():
+
+                    # get the current price
+                    cur_high = row['High']
+                    cur_low = row['Low']
+
+                    # update the max profit
+                    if cur_low < max_profit:
+                        max_profit = cur_low
+
+                    # check if the stop loss is triggered (first this one to be conservative)
+                    if cur_high > trailing_stop:
+                        # exit the trade
+                        exit_price = trailing_stop
+                        exit_datetime = idx
+                        break
+
+                    # otherwise, check if the current price is above the trailing target
+                    if cur_low < trailing_target:
+                        # update the trailing stop and target
+                        trailing_stop -= initial_risk
+                        trailing_target -= initial_risk
+
+            ### use kline pro to plot the trade
+
+        ### if need to make plot
+        if make_plot:
+
+            # some temp variables
+            num_candles_before_entry = 0
+            num_candles_after_exit = 100
+
+
+            # get the dataframe for single trade history
+            entry_idx = self.df_OHLC_low.index.get_loc(entry_datetime)
+            exit_idx = self.df_OHLC_low.index.get_loc(exit_datetime)
+            if exit_idx + num_candles_after_exit > len(self.df_OHLC_low):
+                df_single_trade = self.df_OHLC_low.iloc[entry_idx - num_candles_before_entry:].copy()
+            else:
+                df_single_trade = self.df_OHLC_low.iloc[entry_idx - num_candles_before_entry: exit_idx + num_candles_after_exit].copy()
+
+            # rename the columns (Datetime -> dt, Open -> open, etc.)
+            df_single_trade.reset_index(inplace=True)
+            df_single_trade['dt'] = df_single_trade['Date']
+            df_single_trade['open'] = df_single_trade['Open']
+            df_single_trade['high'] = df_single_trade['High']
+            df_single_trade['low'] = df_single_trade['Low']
+            df_single_trade['close'] = df_single_trade['Close']
+            df_single_trade['vol'] = df_single_trade['Volume']
+            if 'text' not in df_single_trade.columns:
+                df_single_trade['text'] = ""
+
+            # now draw the plot
+            from Utils.util_plot_KlineChart import KlineChart
+            kline = KlineChart(n_rows=4, title="{}-{}".format(self.name_symbol, self.timeframe_low))
+            kline.add_kline(df_single_trade, name="")
+            kline.add_vol(df_single_trade, row=2)
+
+            return exit_price, exit_datetime, max_profit, kline.fig
+
+        else:
+            return exit_price, exit_datetime, max_profit, []
     def find_entries_vectorize_high_low(self,
                                         manual_review_each_trade,
                                         # trade_direction='long',
@@ -296,126 +399,6 @@ class Backtesting:
         self.df_entry_log = df_entry_log
 
         return df_entry_log
-
-    def check_single_trade_trailing_stop(self,
-                                         df_OHLC_low_forward_temp,
-                                         entry_price,
-                                         entry_datetime,
-                                         direction,
-                                         initial_risk,
-                                         trailing_target_initial_multiple,
-                                         make_plot=False,
-                                         ):
-        """
-        This function evaluates the outcome of one signal trade with the given entry and initial stop loss amount
-        and returns the exit price and exit datetime. With price going in the anticipated direction and achieving
-        multiples of the initial stop loss amount, the stop loss will be updated to go along with the price.
-        """
-
-        ### case for long trades
-        if direction == 'long':
-
-            # initialize the trailing stop and target
-            trailing_stop = entry_price - initial_risk
-            trailing_target = entry_price + initial_risk * trailing_target_initial_multiple
-            max_profit = entry_price  ### this tracks the maximum profit potential
-
-            # loop through the forward dataframe
-            for idx, row in df_OHLC_low_forward_temp.iterrows():
-
-                    # get the current price
-                    cur_high = row['High']
-                    cur_low = row['Low']
-
-                    # update the max profit
-                    if cur_high > max_profit:
-                        max_profit = cur_high
-
-                    # check if the stop loss is triggered (first this one to be conservative)
-                    if cur_low < trailing_stop:
-                        # exit the trade
-                        exit_price = trailing_stop
-                        exit_datetime = idx
-                        break
-
-                    # otherwise, check if the current price is above the trailing target
-                    if cur_high > trailing_target:
-                        # update the trailing stop and target
-                        trailing_stop += initial_risk
-                        trailing_target += initial_risk
-
-        ### case for short trades
-        # TODO - this needs to be verified
-        elif direction == 'short':
-
-                # initialize the trailing stop and target
-                trailing_stop = entry_price + initial_risk
-                trailing_target = entry_price - initial_risk * trailing_target_initial_multiple
-                max_profit = entry_price  ### this tracks the maximum profit potential
-
-                # loop through the forward dataframe
-                for idx, row in df_OHLC_low_forward_temp.iterrows():
-
-                    # get the current price
-                    cur_high = row['High']
-                    cur_low = row['Low']
-
-                    # update the max profit
-                    if cur_low < max_profit:
-                        max_profit = cur_low
-
-                    # check if the stop loss is triggered (first this one to be conservative)
-                    if cur_high > trailing_stop:
-                        # exit the trade
-                        exit_price = trailing_stop
-                        exit_datetime = idx
-                        break
-
-                    # otherwise, check if the current price is above the trailing target
-                    if cur_low < trailing_target:
-                        # update the trailing stop and target
-                        trailing_stop -= initial_risk
-                        trailing_target -= initial_risk
-
-            ### use kline pro to plot the trade
-
-        ### if need to make plot
-        if make_plot:
-
-            # some temp variables
-            num_candles_before_entry = 0
-            num_candles_after_exit = 100
-
-
-            # get the dataframe for single trade history
-            entry_idx = self.df_OHLC_low.index.get_loc(entry_datetime)
-            exit_idx = self.df_OHLC_low.index.get_loc(exit_datetime)
-            if exit_idx + num_candles_after_exit > len(self.df_OHLC_low):
-                df_single_trade = self.df_OHLC_low.iloc[entry_idx - num_candles_before_entry:].copy()
-            else:
-                df_single_trade = self.df_OHLC_low.iloc[entry_idx - num_candles_before_entry: exit_idx + num_candles_after_exit].copy()
-
-            # rename the columns (Datetime -> dt, Open -> open, etc.)
-            df_single_trade.reset_index(inplace=True)
-            df_single_trade['dt'] = df_single_trade['Date']
-            df_single_trade['open'] = df_single_trade['Open']
-            df_single_trade['high'] = df_single_trade['High']
-            df_single_trade['low'] = df_single_trade['Low']
-            df_single_trade['close'] = df_single_trade['Close']
-            df_single_trade['vol'] = df_single_trade['Volume']
-            if 'text' not in df_single_trade.columns:
-                df_single_trade['text'] = ""
-
-            # now draw the plot
-            from Utils.util_plot_KlineChart import KlineChart
-            kline = KlineChart(n_rows=4, title="{}-{}".format(self.name_symbol, self.timeframe_low))
-            kline.add_kline(df_single_trade, name="")
-            kline.add_vol(df_single_trade, row=2)
-
-            return exit_price, exit_datetime, max_profit, kline.fig
-
-        else:
-            return exit_price, exit_datetime, max_profit, []
 
     def execute_trades(self,
                        df_entry_log=None,
