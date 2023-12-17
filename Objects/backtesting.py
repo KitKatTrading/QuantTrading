@@ -239,7 +239,7 @@ class Backtesting:
                         df_OHLC_mid_temp,
                         name_symbol=self.name_symbol,
                         time_frame=self.timeframe_mid,
-                        num_candles=300,
+                        num_candles=500,
                     ))
             except:
                 # print('- error - invalid pattern module')
@@ -258,6 +258,21 @@ class Backtesting:
                 else:
                     continue
 
+            # save the html plot
+            if save_plots:
+                fig_hubs.write_html(os.path.join(self.backtesting_dir_symbol,
+                                                 f"Entry_{num_entry}_setup.html"))
+
+            # if need to manually review each plot:
+            if manual_review_each_trade:
+                fig_hubs.show()
+                user_input = input("\nPress anykey to keep the trade, or N to skip: ")
+                if user_input.upper() == 'N':
+                    print("trade skipped")
+                    continue
+                else:
+                    print("trade kept")
+
             # update the entry log if there is a valid final decision
             num_entry += 1
             new_row = {
@@ -274,17 +289,8 @@ class Backtesting:
             # expand the dataframe
             df_entry_log = pd.concat([df_entry_log, pd.DataFrame(new_row, index=[num_entry])])
 
-            # save the html plot
-            if save_plots:
-                fig_hubs.write_html(os.path.join(self.backtesting_dir_symbol,
-                                                 f"Entry_{num_entry}_setup.html"))
 
-            # if need to manually review each plot:
-            if manual_review_each_trade:
-                fig_hubs.show()
-                input("Press Enter to continue...")
-
-        # completed all entries, save the entry log
+        ### completed all entries, save the entry log
         df_entry_log.dropna(inplace=True)
         df_entry_log.to_csv(os.path.join(self.backtesting_dir_strategy, f"df_final_entry_{self.name_strategy}_{self.name_symbol}.csv"))
         self.df_entry_log = df_entry_log
@@ -484,6 +490,7 @@ class Backtesting:
         df_trade_log['rrr_max'] = df_trade_log['pnl_max'] / df_trade_log['initial_risk']
         df_trade_log['duration'] = df_trade_log['exit_idx'] - df_trade_log['entry_idx']
         df_trade_log['win_loss'] = df_trade_log['rrr'].apply(lambda x: 'W' if x > 0.01 else ('L' if x < -0.01 else 'E'))
+        df_trade_log['avg_rrr_wl'] = df_trade_log[df_trade_log['win_loss'] != 'E']['rrr'].mean()
 
         # save the trade log
         self.df_trade_log = df_trade_log

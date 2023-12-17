@@ -244,13 +244,16 @@ def find_hubs(df_PV_segments):
 
 def pattern_setup_trending_hubs_pull_back(df_hubs, cur_datetime, cur_price):
     """ This function identifies the pullback trading setup for trending hubs"""
+    """ v0. Initial Release"""
+    """ v1. 2023/12/16 tried three consecutive trending hubs requirement"""
 
     # Extract the last two hubs
-    if len(df_hubs) < 2:
+    if len(df_hubs) < 3:
         return 0, 'No valid setup'
     else:
         hub_cur = df_hubs.iloc[-1]
         hub_prev = df_hubs.iloc[-2]
+        hub_prev_prev = df_hubs.iloc[-3]
 
     # Check if the current candle is in the last hub (in terms of time)
     cur_datetime_dt = datetime.strptime(cur_datetime, '%Y-%m-%d %H:%M:%S+00:00')
@@ -261,15 +264,15 @@ def pattern_setup_trending_hubs_pull_back(df_hubs, cur_datetime, cur_price):
     # --- Check the relation between the two hubs
     # Case 1 - the last hub is higher than the previous hub (up trend)
     msg = 'No valid setup'
-    if hub_cur['low'] > hub_prev['high']:  # up trending hubs
-        if cur_price < hub_cur['low'] and cur_price > hub_prev['low']:
+    if hub_cur['high'] > hub_prev['high'] > hub_prev_prev['high']:  # up trending hubs
+        if cur_price < hub_cur['low'] and cur_price > hub_prev['high']:
             msg = 'Pullback long setup'
             return 1, msg  # pullback long setup
         else:
             return 0, msg  # no valid setup
     # Case 2 - the last hub is lower than the previous one (down trend)
-    elif hub_cur['high'] < hub_prev['low']:  # down trending hubs
-        if cur_price > hub_cur['high'] and cur_price < hub_prev['high']:
+    elif hub_cur['low'] < hub_prev['low'] < hub_prev_prev['low']:  # down trending hubs
+        if cur_price > hub_cur['high'] and cur_price < hub_prev['low']:
             msg = 'Pullback short setup'
             return -1, msg  # pullback short setup
         else:

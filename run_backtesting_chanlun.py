@@ -20,7 +20,7 @@ if __name__ == '__main__':
                     'AVAXUSDT', 'ATOMUSDT', 'UNIUSDT', 'APTUSDT', 'NEARUSDT', 'RUNEUSDT', 'OPUSDT', 'INJUSDT',
                     'LDOUSDT', 'EGLDUSDT', 'THETAUSDT', 'FTMUSDT', 'SANDUSDT', 'GALAUSDT', 'XTZUSDT', 'EOSUSDT',
                     'LTCUSDT', 'BCHUSDT', 'ZECUSDT', 'SEIUSDT', 'FILUSDT', 'DOTUSDT', 'LINKUSDT', 'AAVEUSDT',
-                    'OCEANUSDT', 'AGLDUSDT', 'TRBUSDT', 'ALICEUSDT', 'XMRUSDT', 'XLMUSDT',
+                    'OCEANUSDT', 'AGLDUSDT', 'TRBUSDT', 'ALICEUSDT', 'XMRUSDT', 'XLMUSDT', 'DYDXUSDT', 'ICPUSDT',
                     'VETUSDT', 'SUSHIUSDT', 'KSMUSDT', 'GRTUSDT', '1INCHUSDT', 'ZENUSDT', 'YFIUSDT', 'BATUSDT',
                     'SNXUSDT', 'MKRUSDT', 'COMPUSDT', 'ENJUSDT', 'RENUSDT', 'CRVUSDT', 'MANAUSDT', 'MASKUSDT',
                     'CELRUSDT', 'OGNUSDT', 'REEFUSDT', 'DENTUSDT', 'RVNUSDT', 'DODOUSDT', 'HNTUSDT', 'TOMOUSDT',
@@ -28,10 +28,17 @@ if __name__ == '__main__':
                     'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
     # names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'INJUSDT', 'OPUSDT']
     # names_symbol = ['EGLDUSDT']
+    # names_symbol = ['BTCUSDT']
 
     # initialize master dataframe for all symbols
     df_master = pd.DataFrame(columns=['name_symbol', 'num_trades', 'num_wins', 'num_losses', 'num_breakeven',
-                                      'avg_rrr_win', 'avg_rrr_lose', 'avg_rrr_all', 'avg_duration'])
+                                      'avg_rrr_win', 'avg_rrr_lose', 'avg_rrr_wl', 'avg_rrr_ratio',
+                                      'win_rate', 'win_rate_be', 'avg_duration'])
+
+    df_trade_log_all = pd.DataFrame(columns=['name_symbol', 'entry_number', 'direction', 'datetime_entry', 'entry_idx',
+                                             'entry_price', 'initial_risk', 'datetime_exit', 'exit_idx', 'exit_price',
+                                             'max_profit', 'pnl', 'pnl_max', 'rrr', 'rrr_max', 'duration', 'win_loss'])
+
 
     for idx, name_symbol in enumerate(names_symbol):
         print(f"Processing {name_symbol}:")
@@ -61,9 +68,14 @@ if __name__ == '__main__':
 
         # Add the trade log to the master dataframe
         # udpate the trade results dataframe
+        num_wins = len(df_trade_log[df_trade_log['win_loss'] == 'W'])
+        num_losses = len(df_trade_log[df_trade_log['win_loss'] == 'L'])
         avg_rrr_win = df_trade_log[df_trade_log['win_loss'] == 'W']['rrr'].mean()
         avg_rrr_lose = df_trade_log[df_trade_log['win_loss'] == 'L']['rrr'].mean()
-        avg_rrr_all = abs(avg_rrr_win / avg_rrr_lose)
+        avg_rrr_wl = df_trade_log[df_trade_log['win_loss'] != 'B']['rrr'].mean()
+        avg_rrr_ratio = abs(avg_rrr_win / avg_rrr_lose)
+        win_rate = num_wins / (num_wins + num_losses)
+        win_rate_be = 1 / (1 + avg_rrr_ratio)
         cur_symbol = {
             'name_symbol': name_symbol,
             'num_trades': len(df_trade_log),
@@ -72,7 +84,10 @@ if __name__ == '__main__':
             'num_breakeven': len(df_trade_log[df_trade_log['win_loss'] == 'B']),
             'avg_rrr_win': avg_rrr_win,
             'avg_rrr_lose': avg_rrr_lose,
-            'avg_rrr_all': avg_rrr_all,
+            'avg_rrr_ratio': avg_rrr_ratio,
+            'avg_rrr_wl': avg_rrr_wl,
+            'win_rate': win_rate,
+            'win_rate_be': win_rate_be,
             'avg_duration': df_trade_log['duration'].mean()
         }
         df_master = pd.concat([df_master, pd.DataFrame(cur_symbol, index=[idx])])
