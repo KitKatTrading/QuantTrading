@@ -1,8 +1,8 @@
 import pandas as pd
 import os
 
-dir_data = 'module_data'
-dir_backtesting = 'module_backtesting'
+# dir_data = 'module_data'
+# dir_backtesting = 'module_backtesting'
 
 # Setting pandas display options for better data visibility
 pd.set_option('display.max_columns', None)
@@ -15,7 +15,7 @@ class PNL:
         self.bt_start = datetime_bt_start
         self.bt_end = datetime_bt_end
         self.timeframe_low = timeframe_low
-        self.dir_backtesting_job = os.path.join(dir_backtesting, job_name)
+        self.dir_backtesting_job = job_name  # this should be a folder under "module_backtesting" directory
         self.df_trade_log_all = None
         self.dict_df_ohlc = None
         self.df_pnl_curve = None
@@ -42,17 +42,20 @@ class PNL:
                 # add the file to the master trade log file and update index
                 df_trade_log_all = pd.concat([df_trade_log_all, df_trade_log]).reset_index(drop=True)
 
-                # add the OHLC data to the dict
-                df_ohlc = pd.read_csv(os.path.join(dir_data, 'data_binance', f'{name_symbol}_{self.timeframe_low}.csv'), index_col=0)
-                dict_df_ohlc[name_symbol] = df_ohlc
+                # add the OHLC data to the dict, if the symbol has not been added yet
+                if name_symbol not in dict_df_ohlc.keys():
+                    df_ohlc = pd.read_csv(os.path.join(dir_data, 'data_binance', f'{name_symbol}_{self.timeframe_low}.csv'), index_col=0)
+                    dict_df_ohlc[name_symbol] = df_ohlc
 
-
-        # clean up the master trade log file
-        df_trade_log_all.drop(columns=['entry_number', 'entry_idx', 'exit_idx', 'max_profit', 'pnl_max', 'rrr', 'rrr_max',
-                                        'duration', 'win_loss'], inplace=True)
+        # clean up the master trade log file by only keeping essential columns for pnl analysis
+        df_trade_log_all = df_trade_log_all[['name_symbol', 'datetime_entry', 'datetime_exit', 'entry_price', 'exit_price', 'initial_risk', 'direction']]
 
         # re-order the rows by datetime_entry in an ascending order to simulate the trades chronologically.
         df_trade_log_all.sort_values(by=['datetime_entry'], inplace=True)
+        df_trade_log_all.dropna(inplace=True)
+
+        # reset the index
+        df_trade_log_all.reset_index(drop=True, inplace=True)
 
         # save the dataframes to class attributes
         self.df_trade_log_all = df_trade_log_all
@@ -61,37 +64,39 @@ class PNL:
         # Now run the trade simulation
         self.simulate_trades_lean(single_trade_size=0.02)
 
-    def simulate_trades_lean(self, single_trade_size=0.02, starting_capital=10000.0):
+    def simulate_trades_lean(self, single_trade_size=0.02, starting_capital=10000.0, add_buy_and_hold=True):
         """ Simulate the trades and generate the PnL curve. """
         """ single trade size is the proportion of the total equity to use for each trade."""
         """ this is the vectorized way of calculating pnl, faster but less details. Only pnl curve is available. """
 
-        ### calculate single trade risk amount in USD(T)
+        # calculate single trade risk amount in USD(T)
         single_trade_risk = starting_capital * single_trade_size
 
-        ### generate the empty dataframe for the PnL curve
+        # generate the empty dataframe for the PnL curve
         df_pnl_curve = pd.DataFrame(starting_capital,
                                     index=pd.date_range(start=self.bt_start, end=self.bt_end, freq=self.timeframe_low),
                                     columns=['total'])
 
-        # df_pnl_curve = pd.DataFrame(0, index=pd.date_range(start=self.bt_start, end=self.bt_end, freq=self.timeframe_low),
-        #                             columns=['cash', 'equity', 'total'])
-        # df_pnl_curve.loc[self.bt_start]['cash'] = starting_capital
-        # df_pnl_curve.loc[self.bt_start]['equity'] = 0
-
-
         # now loop through the master trade log df_trade_log_all to simulate each trade
-        for idx, row in self.df_trade_log_all.iterrows():
+        print('Simulating trades...')
+        from tqdm import tqdm
+        for idx, row in tqdm(self.df_trade_log_all.iterrows(), total=len(self.df_trade_log_all)):
 
             # get the symbol and OHLC data for the trade
             name_symbol = row['name_symbol']
             df_ohlc = self.dict_df_ohlc[name_symbol]
+            # print(f"Processing {idx} trade for {name_symbol}...")
+
+            # check if index has nan
+            if df_ohlc.index.hasnans:
+                print(f"NaN found in {name_symbol} OHLC data. Skipping this symbol.")
+                continue
 
             # get the entry and exit datetime and price
             datetime_entry = row['datetime_entry']
             datetime_exit = row['datetime_exit']
             entry_price = row['entry_price']
-            exit_price = row['exit_price']
+            # exit_price = row['exit_price']
             initial_risk = row['initial_risk']
             trade_direction = row['direction']
 
@@ -131,32 +136,63 @@ class PNL:
             # integrate this trade to the overall pnl curve
             df_pnl_curve['total'] = df_pnl_curve['total'].add(df_pnl_single_trade_merged['total'], fill_value=0)
 
+
+        # if add_buy_and_hold (use BTC as the benchmark)
+        if add_buy_and_hold:
+            # get the BTC OHLC data
+            df_ohlc_buy_hold_ref = self.dict_df_ohlc['BTCUSDT']
+            df_ohlc_buy_hold_ref = df_ohlc_buy_hold_ref.loc[self.bt_start:self.bt_end]
+
+            # calculate the PnL for buy and hold
+            df_pnl_buy_and_hold = df_ohlc_buy_hold_ref[['Close']] * (starting_capital / df_ohlc_buy_hold_ref.iloc[0]['Close'])
+            df_pnl_buy_and_hold.rename(columns={'Close': 'buy_and_hold'}, inplace=True)
+            df_pnl_buy_and_hold.index = pd.to_datetime(df_pnl_buy_and_hold.index)
+            df_pnl_buy_and_hold.index = df_pnl_buy_and_hold.index.tz_convert('UTC')
+
+            # Check for duplicate indices
+            duplicate_indices = df_pnl_buy_and_hold.index.duplicated()
+            has_duplicates = any(duplicate_indices)
+            assert not has_duplicates, "Duplicate indices in the PnL curve!"
+
+            # integrate the buy and hold pnl to the overall pnl curve
+            df_pnl_curve['buy_and_hold'] = df_pnl_buy_and_hold['buy_and_hold']
+
+
         # save the pnl curve to class attribute
         self.df_pnl_curve = df_pnl_curve
 
-    def visualize_pnl_curve(self):
+    def visualize_pnl_curve(self, add_buy_and_hold=True):
         """Visualize the PnL curve using plotly and save as HTML."""
         import plotly.graph_objects as go
         import plotly.io as pio
         pio.renderers.default = "browser"
 
         # Create the figure with a line chart representing the PnL curve
-        fig = go.Figure(data=[go.Scatter(x=self.df_pnl_curve.index, y=self.df_pnl_curve['total'], mode='lines')])
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=self.df_pnl_curve.index, y=self.df_pnl_curve['total'], mode='lines', name='PnL'))
+
+        # Add a line chart representing the buy and hold strategy
+        if add_buy_and_hold and 'buy_and_hold' in self.df_pnl_curve.columns:
+            fig.add_trace(go.Scatter(x=self.df_pnl_curve.index, y=self.df_pnl_curve['buy_and_hold'], mode='lines',
+                                     name='Buy and Hold'))
 
         # Update layout for better visibility
         fig.update_layout(
-            title='PnL Curve',
-            title_font_size=48,
-            xaxis=dict(title='', title_font=dict(size=32)),
-            yaxis=dict(title='PnL (USDT)', title_font=dict(size=32)),
-            font=dict(size=32)  # This sets the global font size
+            # title='PnL Curve',
+            # title_font_size=32,
+            # xaxis=dict(title='Date', title_font=dict(size=32)),
+            yaxis=dict(title='PnL (USDT)', title_font=dict(size=32), range=[0, max(self.df_pnl_curve['total'].max(),
+                                                                                   self.df_pnl_curve.get('buy_and_hold',
+                                                                                                         [0]).max())]),
+            font=dict(size=32),  # This sets the global font size
+            legend=dict(font=dict(size=32), x=0.01, y=0.99, bgcolor='rgba(255,255,255,0.5)', bordercolor='Black'),
+            margin=dict(l=50, r=50, t=50, b=50)  # Set margins to ensure visibility of titles
         )
 
+        # Set the y-axis to always start from zero
+        fig.update_yaxes(rangemode='tozero')
+
         return fig
-
-
-
-
 
 
 if __name__ == '__main__':
@@ -165,8 +201,11 @@ if __name__ == '__main__':
     dir_root = os.path.dirname(os.getcwd())
     dir_data = os.path.join(dir_root, 'module_data')
     dir_backtesting = os.path.join(dir_root, 'module_backtesting')
+    job_name = os.path.join(dir_backtesting, 'chanlun20231216-045253_twohubs_1h')
+    job_name = os.path.join(dir_backtesting, 'chanlun20231216-234041_threehubs_1h')
 
-    pnl = PNL(job_name='chanlun20231216-234041_threehubs_1h',
+
+    pnl = PNL(job_name=job_name,
               datetime_bt_start='2021-01-01 00:00:00+00:00',
               datetime_bt_end='2023-12-16 23:40:41+00:00',
               timeframe_low='1h')

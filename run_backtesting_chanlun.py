@@ -3,13 +3,13 @@ from Objects.pnl_analysis import *
 
 datetime_now_str = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
 
-name_strategy_high_timeframe = 'always_long'
-# name_strategy_high_timeframe = 'SMA_5_10_20_trend'
+# name_strategy_high_timeframe = 'always_long'
+name_strategy_high_timeframe = 'SMA_5_10_20_trend'
 timeframe_high = '1w'
 name_strategy_mid_timeframe = 'chanlun'
-timeframe_mid = '4h'
+timeframe_mid = '1h'
 name_strategy_low_timeframe = 'RSI_extreme_cross'
-timeframe_low = '30m'
+timeframe_low = '1h'
 
 name_backtesting = os.path.join(f"{datetime_now_str}_"
                                 f"{name_strategy_high_timeframe}_{timeframe_high}_"
@@ -34,7 +34,7 @@ if __name__ == '__main__':
                     'CELRUSDT', 'OGNUSDT', 'REEFUSDT', 'DENTUSDT', 'RVNUSDT', 'DODOUSDT', 'HNTUSDT', 'TOMOUSDT',
                     'LITUSDT', 'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'HOTUSDT', 'NKNUSDT',
                     'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
-    names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'INJUSDT', 'OPUSDT']
+    # names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'INJUSDT', 'OPUSDT']
     # names_symbol = ['EGLDUSDT']
     # names_symbol = ['BTCUSDT']
 
