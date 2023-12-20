@@ -3,9 +3,9 @@ from Objects.pnl_analysis import *
 
 datetime_now_str = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
 
-# name_strategy_high_timeframe = 'always_long'
-name_strategy_high_timeframe = 'SMA_5_10_20_trend'
-timeframe_high = '1w'
+name_strategy_high_timeframe = 'always_long'
+# name_strategy_high_timeframe = 'SMA_5_10_20_trend'
+timeframe_high = '12h'
 name_strategy_mid_timeframe = 'chanlun'
 timeframe_mid = '1h'
 name_strategy_low_timeframe = 'RSI_extreme_cross'
@@ -35,7 +35,7 @@ if __name__ == '__main__':
                     'LITUSDT', 'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'HOTUSDT', 'NKNUSDT',
                     'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
     # names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'INJUSDT', 'OPUSDT']
-    # names_symbol = ['EGLDUSDT']
+    names_symbol = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'RUNEUSDT', 'OPUSDT', 'AVAXUSDT']
     # names_symbol = ['BTCUSDT']
 
     # initialize master dataframe for all symbols
@@ -49,6 +49,7 @@ if __name__ == '__main__':
         try:
             # Define the backtesting object
             backtesting = Backtesting(name_symbol=name_symbol, data_source='binance', name_strategy=name_backtesting,
+                                      save_plot=True, save_csv=True,
                                       timeframe_high=timeframe_high,
                                       timeframe_mid=timeframe_mid,
                                       timeframe_low=timeframe_low,
@@ -61,9 +62,7 @@ if __name__ == '__main__':
 
             # Identify the entries
             print("-- identifying entries...")
-            backtesting.find_entries_vectorize_high_low(manual_review_each_trade=False,
-                                                        save_plots=True,
-                                                        save_csv=False)
+            backtesting.find_entries_vectorize_high_low(manual_review_each_trade=False)
 
             # Execute the trades
             print("-- executing trades...")

@@ -4,7 +4,8 @@ from tqdm import tqdm
 from datetime import datetime, timedelta
 from Objects.strategy import Strategy
 
-dir_data = 'module_data'
+# dir_data = 'module_data'
+dir_data = 'module_data_demo'
 dir_backtesting = 'module_backtesting'
 
 def convert_to_higher_timeframe(cur_date_low_timeframe, higher_timeframe):
@@ -64,15 +65,18 @@ def check_single_trade_outcome(df_OHLC_low, entry_datetime, entry_price, directi
 
 class Backtesting:
 
-    def __init__(self, name_symbol, data_source, name_strategy, timeframe_high, timeframe_mid, timeframe_low,
+    def __init__(self, name_symbol, data_source, name_strategy,
+                 save_plot, save_csv, timeframe_high, timeframe_mid, timeframe_low,
                  function_high_timeframe, function_mid_timeframe, function_low_timeframe,
                  bt_start_date, bt_end_date):
 
         self.name_symbol = name_symbol
         self.data_source = data_source
+        self.name_strategy = name_strategy
+        self.save_plot = save_plot
+        self.save_csv = save_csv
         self.bt_start_date = bt_start_date
         self.bt_end_date = bt_end_date
-        self.name_strategy = name_strategy
         self.timeframe_high = timeframe_high
         self.timeframe_mid = timeframe_mid
         self.timeframe_low = timeframe_low
@@ -117,7 +121,6 @@ class Backtesting:
                                          direction,
                                          initial_risk,
                                          trailing_target_initial_multiple,
-                                         make_plot=False,
                                          ):
         """
         This function evaluates the outcome of one signal trade with the given entry and initial stop loss amount
@@ -193,7 +196,7 @@ class Backtesting:
             ### use kline pro to plot the trade
 
         ### if need to make plot
-        if make_plot:
+        if self.save_plot:
 
             # some temp variables
             num_candles_before_entry = 0
@@ -229,11 +232,9 @@ class Backtesting:
 
         else:
             return exit_price, exit_datetime, max_profit, []
+
     def find_entries_vectorize_high_low(self,
                                         manual_review_each_trade,
-                                        # trade_direction='long',
-                                        save_plots,
-                                        save_csv=False,
                                         ):
         """ Run the backtesting using vectorized high and low timeframe modules """
 
@@ -271,14 +272,14 @@ class Backtesting:
         df_decision_entry_short = df_decision_entry.loc[df_decision_entry['decision'] == -1]
 
         ### Output
-        if save_csv:
-            # Save the csv for debugging
-            df_decision_entry.to_csv(os.path.join(self.backtesting_dir_strategy,
-                                                  f"df_decision_entry_{self.name_strategy}_{self.name_symbol}.csv"))
-            df_decision_entry_long.to_csv(os.path.join(self.backtesting_dir_strategy,
-                                                  f"df_decision_entry_long_{self.name_strategy}_{self.name_symbol}.csv"))
-            df_decision_entry_short.to_csv(os.path.join(self.backtesting_dir_strategy,
-                                                  f"df_decision_entry_short_{self.name_strategy}_{self.name_symbol}.csv"))
+        # if self.save_csv:
+        #     # Save the csv for debugging
+        #     df_decision_entry.to_csv(os.path.join(self.backtesting_dir_strategy,
+        #                                           f"df_decision_entry_{self.name_strategy}_{self.name_symbol}.csv"))
+        #     df_decision_entry_long.to_csv(os.path.join(self.backtesting_dir_strategy,
+        #                                           f"df_decision_entry_long_{self.name_strategy}_{self.name_symbol}.csv"))
+        #     df_decision_entry_short.to_csv(os.path.join(self.backtesting_dir_strategy,
+        #                                           f"df_decision_entry_short_{self.name_strategy}_{self.name_symbol}.csv"))
 
 
         ### ------------ Iterations for backtesting ------------ ###
@@ -362,7 +363,7 @@ class Backtesting:
                     continue
 
             # save the html plot
-            if save_plots:
+            if self.save_plot:
                 fig_hubs.write_html(os.path.join(self.backtesting_dir_symbol,
                                                  f"Entry_{num_entry}_setup.html"))
 
@@ -403,6 +404,7 @@ class Backtesting:
     def execute_trades(self,
                        df_entry_log=None,
                        stop_type="recent_pivot",
+                       num_candles_for_pivot=5,
                        profit_type='trailing_stop',
                        save_csv=True):
 
@@ -428,7 +430,7 @@ class Backtesting:
             # Get the initial stop loss
             if stop_type == "recent_pivot":
                 # get recent 5 candles
-                df_OHLC_low_temp = self.df_OHLC_low.iloc[entry_idx-5:entry_idx+1].copy()
+                df_OHLC_low_temp = self.df_OHLC_low.iloc[entry_idx-num_candles_for_pivot:entry_idx+1].copy()
                 if direction == 'long':
                     initial_stop = df_OHLC_low_temp['Low'].min()
                 elif direction == 'short':
@@ -443,10 +445,9 @@ class Backtesting:
                 exit_price, exit_datetime, max_profit, fig_single_trade \
                     = self.check_single_trade_trailing_stop(df_OHLC_low_forward_temp, entry_price, entry_datetime,
                                                             direction, initial_risk, trailing_target_initial_multiple=2,
-                                                            make_plot=True,
                                                             )
-            fig_single_trade.write_html(os.path.join(self.backtesting_dir_symbol,
-                                                     f"Entry_{idx}_execution.html"))
+            if self.save_plot:
+                fig_single_trade.write_html(os.path.join(self.backtesting_dir_symbol, f"Entry_{idx}_execution.html"))
 
             # udpate the trade results dataframe
             new_row = {
@@ -477,9 +478,8 @@ class Backtesting:
 
         # save the trade log
         self.df_trade_log = df_trade_log
-        if save_csv:
-            df_trade_log.to_csv(os.path.join(self.backtesting_dir_strategy,
-                                             f"df_trade_log_{self.name_strategy}_{self.name_symbol}.csv"))
+        df_trade_log.to_csv(os.path.join(self.backtesting_dir_strategy,
+                                         f"df_trade_log_{self.name_strategy}_{self.name_symbol}.csv"))
 
         return df_trade_log
 

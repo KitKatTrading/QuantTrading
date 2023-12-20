@@ -1,8 +1,8 @@
 import pandas as pd
 import os
 
-# dir_data = 'module_data'
-# dir_backtesting = 'module_backtesting'
+dir_data = 'module_data'
+dir_backtesting = 'module_backtesting'
 
 # Setting pandas display options for better data visibility
 pd.set_option('display.max_columns', None)
@@ -103,10 +103,11 @@ class PNL:
             # calculate the position size in USD(T)
             initial_risk_percent = initial_risk / entry_price
             position_size_usdt = single_trade_risk / initial_risk_percent
-            if trade_direction == 'long':
-                position_size_number = position_size_usdt / entry_price
-            elif trade_direction == 'short':
-                position_size_number = -position_size_usdt / entry_price
+            position_size_number = position_size_usdt / entry_price
+            # if trade_direction == 'long':
+            #     position_size_number = position_size_usdt / entry_price
+            # elif trade_direction == 'short':
+            #     position_size_number = -position_size_usdt / entry_price
 
             # get the OHLC data for the trade
             df_ohlc_trade = df_ohlc.loc[datetime_entry:datetime_exit]
@@ -201,8 +202,7 @@ if __name__ == '__main__':
     dir_root = os.path.dirname(os.getcwd())
     dir_data = os.path.join(dir_root, 'module_data')
     dir_backtesting = os.path.join(dir_root, 'module_backtesting')
-    job_name = os.path.join(dir_backtesting, 'chanlun20231216-045253_twohubs_1h')
-    job_name = os.path.join(dir_backtesting, 'chanlun20231216-234041_threehubs_1h')
+    job_name = os.path.join(dir_backtesting, '20231218-041924_always_long_12h_chanlun_1h_RSI_extreme_cross_1h')
 
 
     pnl = PNL(job_name=job_name,
