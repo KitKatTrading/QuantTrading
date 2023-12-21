@@ -1,6 +1,6 @@
 from Objects.strategy import Strategy
 
-strategy_chanlun = Strategy(name_symbol='BTCUSDT', data_source='binance', name_strategy='chanlun_12h',
+strategy_chanlun = Strategy(name_symbol='AVAXUSDT', data_source='binance', name_strategy='chanlun_12h',
                             timeframe_high='1d', timeframe_mid='1h', timeframe_low='1h',
                             function_high_timeframe='always_long',
                             function_mid_timeframe='chanlun',

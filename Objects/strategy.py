@@ -2,10 +2,10 @@ import os
 import pandas as pd
 import importlib
 
-# Adjust dir_data and add dir_utils to the Python path
-current_script_dir = os.path.dirname(__file__)
-dir_data = os.path.join(current_script_dir, '', '../module_data')
-dir_data = os.path.normpath(dir_data)
+# read the config file "config_local_path.py"
+import config_local_path
+PATH_DATA = config_local_path.gvars['dir_module_data_crypto_binance']
+
 
 
 class Strategy:
@@ -31,7 +31,7 @@ class Strategy:
 
         # Set data directory based on data source
         if self.data_source == 'binance':
-            self.data_dir = os.path.join(dir_data, 'data_binance')
+            self.data_dir = os.path.join(PATH_DATA, 'data_binance')
 
         # Dynamically import the decision functions for H/M/L timeframes
         self.strategy_high_timeframe = importlib.import_module(f"module_direction.{self.function_high_timeframe}")

@@ -62,7 +62,7 @@ def initilize_crypto_OHLC_from_binance(symbol, time_scale):
 
     return data_binance_API
 
-def update_crypto_OHLC_from_binance(symbol, time_scale, num_recent_candles=500):
+def update_crypto_OHLC_from_binance(symbol, time_scale, name_subfolder, num_recent_candles=1000):
     client = Client(API_KEY, API_SECRET)
 
     # Mapping time_scale to binance interval
@@ -80,7 +80,7 @@ def update_crypto_OHLC_from_binance(symbol, time_scale, num_recent_candles=500):
     type_binance_interval = interval_map.get(time_scale)
 
     # Path to the CSV file
-    csv_file_path = f'{PATH_DATA}/{symbol}_{time_scale}.csv'
+    csv_file_path = f'{PATH_DATA}/{name_subfolder}/{symbol}_{time_scale}.csv'
 
     # Check if the file exists and get the last date
     if os.path.exists(csv_file_path):
@@ -134,12 +134,24 @@ if __name__ == '__main__':
     parser.add_argument('time_scale', type=str, help='Time scale for the data, e.g., 1w, 1d, 12h, 1h')
     args = parser.parse_args()
     time_scale = args.time_scale  # Get the timescale from command line arguments
-
     # local run
     # time_scale = '1h'
 
     # get all binance future symbols
     name_symbols = get_all_binance_future_symbols()
+
+    # check if there are repeated entries
+    # assert len(name_symbols) == len(set(name_symbols)), "There are repeated entries in name_symbols"
+
+    for name_symbol in name_symbols:
+        print(f"Updating {name_symbol} {time_scale}")
+        data = update_crypto_OHLC_from_binance(name_symbol, time_scale,
+                                               name_subfolder='data_binance',
+                                               num_recent_candles=1000)
+
+
+
+
 
     # name_symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT', 'MATICUSDT',
     #                 'AVAXUSDT', 'ATOMUSDT', 'UNIUSDT', 'APTUSDT', 'NEARUSDT', 'RUNEUSDT', 'OPUSDT', 'INJUSDT',
@@ -151,14 +163,3 @@ if __name__ == '__main__':
     #                 'CELRUSDT', 'OGNUSDT', 'REEFUSDT', 'DENTUSDT', 'RVNUSDT', 'DODOUSDT', 'HNTUSDT', 'TOMOUSDT',
     #                 'LITUSDT', 'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'HOTUSDT', 'NKNUSDT',
     #                 'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
-
-    # check if there are repeated entries
-    # assert len(name_symbols) == len(set(name_symbols)), "There are repeated entries in name_symbols"
-
-    for name_symbol in name_symbols:
-        print(f"Updating {name_symbol} {time_scale}")
-        data = update_crypto_OHLC_from_binance(name_symbol, time_scale)
-
-
-
-
