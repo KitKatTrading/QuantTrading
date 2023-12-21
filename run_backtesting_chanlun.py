@@ -1,27 +1,32 @@
 from Objects.backtesting import *
 from Objects.pnl_analysis import *
 
+# get the current datetime
 datetime_now_str = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-
-name_strategy_high_timeframe = 'always_long'
-# name_strategy_high_timeframe = 'SMA_5_10_20_trend'
-timeframe_high = '12h'
-name_strategy_mid_timeframe = 'chanlun'
-timeframe_mid = '1h'
-name_strategy_low_timeframe = 'RSI_extreme_cross'
-timeframe_low = '1h'
-
-name_backtesting = os.path.join(f"{datetime_now_str}_"
-                                f"{name_strategy_high_timeframe}_{timeframe_high}_"
-                                f"{name_strategy_mid_timeframe}_{timeframe_mid}_"
-                                f"{name_strategy_low_timeframe}_{timeframe_low}")
+datetime_now = datetime.utcnow()
+datetime_now_rounded = datetime_now.replace(minute=0, second=0, microsecond=0)
+datetime_now_rounded = datetime_now_rounded.strftime("%Y-%m-%d %H:%M:%S+00:00")
 
 if __name__ == '__main__':
 
-    # Get the current datetime
-    datetime_now = datetime.utcnow()
-    datetime_now_rounded = datetime_now.replace(minute=0, second=0, microsecond=0)
-    datetime_now_rounded = datetime_now_rounded.strftime("%Y-%m-%d %H:%M:%S+00:00")
+    # Define the strategy
+    name_strategy_high_timeframe = 'always_short'
+    # name_strategy_high_timeframe = 'SMA_5_10_20_trend'
+    timeframe_high = '1h'
+    name_strategy_mid_timeframe = 'chanlun'
+    timeframe_mid = '1h'
+    name_strategy_low_timeframe = 'RSI_extreme_cross'
+    timeframe_low = '1h'
+
+    # Define the backtesting start and end dates
+    bt_start_date = "2021-01-01 00:00:00+00:00"
+    bt_end_date = datetime_now_rounded
+
+    # Define the name of the backtesting
+    name_backtesting = os.path.join(f"{datetime_now_str}_"
+                                    f"{name_strategy_high_timeframe}_{timeframe_high}_"
+                                    f"{name_strategy_mid_timeframe}_{timeframe_mid}_"
+                                    f"{name_strategy_low_timeframe}_{timeframe_low}")
 
     # Define the list of names and symbols
     names_symbol = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT', 'MATICUSDT',
@@ -35,7 +40,7 @@ if __name__ == '__main__':
                     'LITUSDT', 'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'HOTUSDT', 'NKNUSDT',
                     'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
     # names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'INJUSDT', 'OPUSDT']
-    names_symbol = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'RUNEUSDT', 'OPUSDT', 'AVAXUSDT']
+    # names_symbol = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'RUNEUSDT', 'OPUSDT', 'AVAXUSDT']
     # names_symbol = ['BTCUSDT']
 
     # initialize master dataframe for all symbols
@@ -56,8 +61,8 @@ if __name__ == '__main__':
                                       function_high_timeframe=name_strategy_high_timeframe,
                                       function_mid_timeframe=name_strategy_mid_timeframe,
                                       function_low_timeframe=name_strategy_low_timeframe,
-                                      bt_start_date='2021-01-01 00:00:00+00:00',
-                                      bt_end_date=datetime_now_rounded)
+                                      bt_start_date=bt_start_date,
+                                      bt_end_date=bt_end_date)
                                       # bt_end_date='2023-07-01 00:00:00+00:00')
 
             # Identify the entries

@@ -238,7 +238,6 @@ class Backtesting:
                                         ):
         """ Run the backtesting using vectorized high and low timeframe modules """
 
-
         ### SECTION 1 - Preprocessing the entry signals that can be vectorized
         ### DIRECTION MODULE
         # Load data
@@ -428,6 +427,7 @@ class Backtesting:
             entry_idx = self.df_OHLC_low.index.get_loc(entry_datetime)
 
             # Get the initial stop loss
+            initial_stop = 0
             if stop_type == "recent_pivot":
                 # get recent 5 candles
                 df_OHLC_low_temp = self.df_OHLC_low.iloc[entry_idx-num_candles_for_pivot:entry_idx+1].copy()
@@ -467,9 +467,12 @@ class Backtesting:
             df_trade_log = pd.concat([df_trade_log, pd.DataFrame(new_row, index=[idx])])
 
         ### Post-trade summary
+        # encode direction into -1 and 1 for short and long
+        df_trade_log['direction_num'] = df_trade_log['direction'].apply(lambda x: -1 if x == 'short' else 1)
+
         # pnl analysis
-        df_trade_log['pnl'] = df_trade_log['exit_price'] - df_trade_log['entry_price']
-        df_trade_log['pnl_max'] = df_trade_log['max_profit'] - df_trade_log['entry_price']
+        df_trade_log['pnl'] = (df_trade_log['exit_price'] - df_trade_log['entry_price']) * df_trade_log['direction_num']
+        df_trade_log['pnl_max'] = (df_trade_log['max_profit'] - df_trade_log['entry_price']) * df_trade_log['direction_num']
         df_trade_log['rrr'] = df_trade_log['pnl'] / df_trade_log['initial_risk']
         df_trade_log['rrr_max'] = df_trade_log['pnl_max'] / df_trade_log['initial_risk']
         df_trade_log['duration'] = df_trade_log['exit_idx'] - df_trade_log['entry_idx']
