@@ -11,8 +11,7 @@ pd.set_option('display.width', 200)
 
 # import local path
 import config_local_path
-PATH_DATA = config_local_path.gvars['dir_module_data']
-# PATH_BACKTEST = config_local_path.gvars['dir_module_backtest']
+PATH_DATA = config_local_path.gvars['dir_module_data_crypto_binance']
 
 # import API keys
 import config_binance_vpn
@@ -131,13 +130,13 @@ def get_all_binance_future_symbols():
 if __name__ == '__main__':
 
     # Parse command line arguments for time scale
-    # parser = argparse.ArgumentParser(description='Download and update cryptocurrency data for a specific time scale.')
-    # parser.add_argument('time_scale', type=str, help='Time scale for the data, e.g., 1w, 1d, 12h, 1h')
-    # args = parser.parse_args()
-    # time_scale = args.time_scale  # Get the timescale from command line arguments
+    parser = argparse.ArgumentParser(description='Download and update cryptocurrency data for a specific time scale.')
+    parser.add_argument('time_scale', type=str, help='Time scale for the data, e.g., 1w, 1d, 12h, 1h')
+    args = parser.parse_args()
+    time_scale = args.time_scale  # Get the timescale from command line arguments
 
     # local run
-    time_scale = '1h'
+    # time_scale = '1h'
 
     # get all binance future symbols
     name_symbols = get_all_binance_future_symbols()
