@@ -9,6 +9,11 @@ import argparse  # Import argparse
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
+# import local path
+import config_local_path
+PATH_DATA = config_local_path.gvars['dir_module_data']
+# PATH_BACKTEST = config_local_path.gvars['dir_module_backtest']
+
 # import API keys
 import config_binance_vpn
 API_KEY = config_binance_vpn.gvars['API_KEY']
@@ -17,7 +22,6 @@ API_SECRET = config_binance_vpn.gvars['API_SECRET']
 # Datetime formats and constants
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S+00:00"
 DATETIME_START = '2020-01-01 00:00:00+00:00'
-PATH_DATA = 'module_data/data_binance'
 
 # Function to update symbol data from Binance
 def initilize_crypto_OHLC_from_binance(symbol, time_scale):
@@ -125,25 +129,29 @@ def get_all_binance_future_symbols():
 
 # Running the function
 if __name__ == '__main__':
+
     # Parse command line arguments for time scale
-    parser = argparse.ArgumentParser(description='Download and update cryptocurrency data for a specific time scale.')
-    parser.add_argument('time_scale', type=str, help='Time scale for the data, e.g., 1w, 1d, 12h, 1h')
-    args = parser.parse_args()
-    time_scale = args.time_scale  # Get the timescale from command line arguments
+    # parser = argparse.ArgumentParser(description='Download and update cryptocurrency data for a specific time scale.')
+    # parser.add_argument('time_scale', type=str, help='Time scale for the data, e.g., 1w, 1d, 12h, 1h')
+    # args = parser.parse_args()
+    # time_scale = args.time_scale  # Get the timescale from command line arguments
+
+    # local run
+    time_scale = '1h'
 
     # get all binance future symbols
     name_symbols = get_all_binance_future_symbols()
 
-    name_symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT', 'MATICUSDT',
-                    'AVAXUSDT', 'ATOMUSDT', 'UNIUSDT', 'APTUSDT', 'NEARUSDT', 'RUNEUSDT', 'OPUSDT', 'INJUSDT',
-                    'LDOUSDT', 'EGLDUSDT', 'THETAUSDT', 'FTMUSDT', 'SANDUSDT', 'GALAUSDT', 'XTZUSDT', 'EOSUSDT',
-                    'LTCUSDT', 'BCHUSDT', 'ZECUSDT', 'SEIUSDT', 'FILUSDT', 'DOTUSDT', 'LINKUSDT', 'AAVEUSDT',
-                    'OCEANUSDT', 'AGLDUSDT', 'TRBUSDT', 'ALICEUSDT', 'XMRUSDT', 'XLMUSDT',
-                    'VETUSDT', 'SUSHIUSDT', 'KSMUSDT', 'GRTUSDT', '1INCHUSDT', 'ZENUSDT', 'YFIUSDT', 'BATUSDT',
-                    'SNXUSDT', 'MKRUSDT', 'COMPUSDT', 'ENJUSDT', 'RENUSDT', 'CRVUSDT', 'MANAUSDT', 'MASKUSDT',
-                    'CELRUSDT', 'OGNUSDT', 'REEFUSDT', 'DENTUSDT', 'RVNUSDT', 'DODOUSDT', 'HNTUSDT', 'TOMOUSDT',
-                    'LITUSDT', 'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'HOTUSDT', 'NKNUSDT',
-                    'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
+    # name_symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT', 'MATICUSDT',
+    #                 'AVAXUSDT', 'ATOMUSDT', 'UNIUSDT', 'APTUSDT', 'NEARUSDT', 'RUNEUSDT', 'OPUSDT', 'INJUSDT',
+    #                 'LDOUSDT', 'EGLDUSDT', 'THETAUSDT', 'FTMUSDT', 'SANDUSDT', 'GALAUSDT', 'XTZUSDT', 'EOSUSDT',
+    #                 'LTCUSDT', 'BCHUSDT', 'ZECUSDT', 'SEIUSDT', 'FILUSDT', 'DOTUSDT', 'LINKUSDT', 'AAVEUSDT',
+    #                 'OCEANUSDT', 'AGLDUSDT', 'TRBUSDT', 'ALICEUSDT', 'XMRUSDT', 'XLMUSDT',
+    #                 'VETUSDT', 'SUSHIUSDT', 'KSMUSDT', 'GRTUSDT', '1INCHUSDT', 'ZENUSDT', 'YFIUSDT', 'BATUSDT',
+    #                 'SNXUSDT', 'MKRUSDT', 'COMPUSDT', 'ENJUSDT', 'RENUSDT', 'CRVUSDT', 'MANAUSDT', 'MASKUSDT',
+    #                 'CELRUSDT', 'OGNUSDT', 'REEFUSDT', 'DENTUSDT', 'RVNUSDT', 'DODOUSDT', 'HNTUSDT', 'TOMOUSDT',
+    #                 'LITUSDT', 'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'HOTUSDT', 'NKNUSDT',
+    #                 'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
 
     # check if there are repeated entries
     # assert len(name_symbols) == len(set(name_symbols)), "There are repeated entries in name_symbols"
