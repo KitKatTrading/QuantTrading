@@ -6,7 +6,7 @@ from Objects.strategy import Strategy
 
 # dir_data = 'module_data'
 dir_data = 'module_data_demo'
-dir_backtesting = 'module_backtesting'
+dir_backtesting = 'D:\\module_backtesting'
 
 def convert_to_higher_timeframe(cur_date_low_timeframe, higher_timeframe):
 

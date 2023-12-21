@@ -117,55 +117,11 @@ def update_crypto_OHLC_from_binance(symbol, time_scale, num_recent_candles=500):
 
     return combined_data
 
-
-class DataHandlerStock:
-    def __init__(self,
-                 path_root,
-                 datetime_start="2010-01-01"):
-        self.path_root = path_root
-        self.datetime_start = datetime_start
-
-    # def fetch_data_yahoo_finance(self, symbol, start, end, interval):
-    #     """
-    #     Fetch historical data_binance for the given symbol, start, end, and interval.
-    #     """
-    #     stock_data = yf.download(symbol, start=start, end=end, interval=interval)
-    #     stock_data.reset_index(inplace=True)
-    #     return stock_data
-
-    def save_to_csv(self, df, file_path):
-        """
-        Save the DataFrame to a local CSV file.
-        """
-        df.to_csv(file_path, index=False)
-
-    def read_from_csv(self, file_path):
-        """
-        Read the DataFrame from a local CSV file.
-        """
-        if os.path.exists(file_path):
-            return pd.read_csv(file_path, parse_dates=['Datetime'])
-        return None
-
-    def update_data(self, symbol, interval):
-        """
-        Update the local CSV file with the latest historical data_binance.
-        """
-        file_path = f"{symbol}_{interval}.csv"
-        existing_data = self.read_from_csv(file_path)
-
-        if existing_data is not None:
-            # If data_binance exists, update the missing rows.
-            start_date = existing_data['Datetime'].max()
-            new_data = self.fetch_data_yahoo_finance(symbol, start=start_date, end=pd.to_datetime("today"), interval=interval)
-            updated_data = pd.concat([existing_data, new_data]).drop_duplicates(subset=['Datetime'])
-        else:
-            # If no data_binance exists, fetch all available data_binance.
-            updated_data = self.fetch_data_yahoo_finance(symbol, start="2010-01-01", end=pd.to_datetime("today"), interval=interval)
-
-        # Save the updated data_binance to CSV.
-        self.save_to_csv(updated_data, file_path)
-
+def get_all_binance_future_symbols():
+    client = Client(API_KEY, API_SECRET)
+    futures_exchange_info = client.futures_exchange_info()
+    symbols = [symbol['symbol'] for symbol in futures_exchange_info['symbols']]
+    return symbols
 
 # Running the function
 if __name__ == '__main__':
@@ -174,6 +130,9 @@ if __name__ == '__main__':
     parser.add_argument('time_scale', type=str, help='Time scale for the data, e.g., 1w, 1d, 12h, 1h')
     args = parser.parse_args()
     time_scale = args.time_scale  # Get the timescale from command line arguments
+
+    # get all binance future symbols
+    name_symbols = get_all_binance_future_symbols()
 
     name_symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT', 'MATICUSDT',
                     'AVAXUSDT', 'ATOMUSDT', 'UNIUSDT', 'APTUSDT', 'NEARUSDT', 'RUNEUSDT', 'OPUSDT', 'INJUSDT',

@@ -58,7 +58,9 @@ class Strategy:
             df_OHLC_mid = df_OHLC_mid
 
         # Call the 'main' function from the strategy module
-        self.pattern_module_decision = self.strategy_mid_timeframe.main(df_OHLC_mid)
+        self.pattern_module_decision = self.strategy_mid_timeframe.main(df_OHLC_mid,
+                                                                        name_symbol=self.name_symbol,
+                                                                        time_frame=self.timeframe_mid)
 
     def run_entry_module(self, use_default_data=True, df_OHLC_low=None):
 
@@ -129,7 +131,7 @@ if __name__ == '__main__':
                                     function_mid_timeframe='chanlun_central_hub',
                                     function_low_timeframe='RSI_divergence')
 
-    strategy_chanlun_12h.check_trading_decision()
+    strategy_chanlun_12h.check_ultimate_decision_all_modules()
     print(strategy_chanlun_12h.direction_module_decision)
     print(strategy_chanlun_12h.pattern_module_decision)
     print(strategy_chanlun_12h.entry_module_decision)
