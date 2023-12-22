@@ -1,19 +1,22 @@
 from Objects.strategy import Strategy
+from binance import Client
 from discordwebhook import Discord
 import datetime
 
-# alert setup
-name_symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT', 'MATICUSDT',
-                'AVAXUSDT', 'ATOMUSDT', 'UNIUSDT', 'APTUSDT', 'NEARUSDT', 'RUNEUSDT', 'OPUSDT', 'INJUSDT',
-                'LDOUSDT', 'EGLDUSDT', 'THETAUSDT', 'FTMUSDT', 'SANDUSDT', 'GALAUSDT', 'XTZUSDT', 'EOSUSDT',
-                'LTCUSDT', 'BCHUSDT', 'ZECUSDT', 'SEIUSDT', 'FILUSDT', 'DOTUSDT', 'LINKUSDT', 'AAVEUSDT',
-                'OCEANUSDT', 'AGLDUSDT', 'TRBUSDT', 'ALICEUSDT', 'XMRUSDT', 'XLMUSDT',
-                'VETUSDT', 'SUSHIUSDT', 'KSMUSDT', 'GRTUSDT', '1INCHUSDT', 'ZENUSDT', 'YFIUSDT', 'BATUSDT',
-                'SNXUSDT', 'MKRUSDT', 'COMPUSDT', 'ENJUSDT', 'RENUSDT', 'CRVUSDT', 'MANAUSDT', 'MASKUSDT',
-                'CELRUSDT', 'OGNUSDT', 'REEFUSDT', 'DENTUSDT', 'RVNUSDT', 'DODOUSDT', 'HNTUSDT', 'TOMOUSDT',
-                'LITUSDT', 'COTIUSDT', 'AUDIOUSDT', 'AKROUSDT', 'CVCUSDT', 'STORJUSDT', 'HOTUSDT', 'NKNUSDT',
-                'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
+def get_all_binance_future_symbols():
+    client = Client(API_KEY, API_SECRET)
+    futures_exchange_info = client.futures_exchange_info()
+    symbols = [symbol['symbol'] for symbol in futures_exchange_info['symbols']]
+    return symbols
+
+# alert setup time frame
 time_frame_mid = '1h'
+
+# Get all future symbol names
+import config_binance_vpn
+API_KEY = config_binance_vpn.gvars['API_KEY']
+API_SECRET = config_binance_vpn.gvars['API_SECRET']
+name_symbols = get_all_binance_future_symbols()
 
 # Set up datetime format
 datetime_format = '%Y-%m-%d %H:%M:%S+00:00'
@@ -26,7 +29,6 @@ webhook_discord = Discord(url=webhook_kk_quant_discord_powaysha)
 for name_symbol in name_symbols:
 
     print(name_symbol)
-
     strategy_chanlun = Strategy(name_symbol=name_symbol, data_source='binance', name_strategy='chanlun_poway',
                                 timeframe_high=time_frame_mid, timeframe_mid=time_frame_mid, timeframe_low=time_frame_mid,
                                 function_high_timeframe='always_long',
