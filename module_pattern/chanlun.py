@@ -397,7 +397,7 @@ def check_bi(bars: List[NewBar], benchmark=None):
     :return:
     """
     # min_bi_len = envs.get_min_bi_len()
-    min_bi_len = 6
+    min_bi_len = 7
     fxs = check_fxs(bars)
     if len(fxs) < 2:
         return None, bars
@@ -753,7 +753,7 @@ class CZSC:
 def main(df_OHLC_mid,
          name_symbol,
          time_frame,
-         num_candles=300,
+         num_candles=500,
          # use_high_low=False,
          ):
 

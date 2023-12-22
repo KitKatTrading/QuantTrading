@@ -132,9 +132,9 @@ if __name__ == '__main__':
                                     function_low_timeframe='RSI_divergence')
 
     strategy_chanlun_12h.check_ultimate_decision_all_modules()
-    print(strategy_chanlun_12h.direction_module_decision)
-    print(strategy_chanlun_12h.pattern_module_decision)
-    print(strategy_chanlun_12h.entry_module_decision)
+    # print(strategy_chanlun_12h.direction_module_decision)
+    # print(strategy_chanlun_12h.pattern_module_decision)
+    # print(strategy_chanlun_12h.entry_module_decision)
 
 
 
