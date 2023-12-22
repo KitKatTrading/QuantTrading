@@ -142,7 +142,7 @@ if __name__ == '__main__':
     strategy_mid_timeframe = importlib.import_module(f"module_pattern.chanlun_poway")
 
     # set up discord webhook
-    webhook_kk_quant_discord_powaysha = 'https://discord.com/api/webhooks/1187690857432895588/rLiDFkbL2pPUmDnaccHDzXLpr4KD5wBTwuy78zL0QaidIWlBsdlKMU_jWxpag9azXKiL'
+    webhook_kk_quant_discord_powaysha = 'https://discord.com/api/webhooks/1187708183368712292/SwWzVhBX1rsn_GxjRdM3YdllQq9hXO55OzoxnKAizAyyfb70nNXGZ5NyrupLu8i60nlz'
     webhook_discord = Discord(url=webhook_kk_quant_discord_powaysha)
 
     # get all binance future symbols
