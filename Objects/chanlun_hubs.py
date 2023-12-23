@@ -79,27 +79,33 @@ def find_hubs(df_PV_segments):
     def check_new_hub_formation(factor_0_type, factor_0, factor_1, factor_2, factor_3):
         hub_high = None
         hub_low = None
+        true_high = None
+        true_low = None
         is_new_hub = False
         if factor_0_type == 'Valley':   ## for a down hub
             is_new_hub = max(factor_0, factor_2) < min(factor_1, factor_3)
             if is_new_hub:
                 hub_high = min(factor_1, factor_3)
                 hub_low = max(factor_0, factor_2)
+                true_high = max(factor_1, factor_3)
+                true_low = min(factor_0, factor_2)
         elif factor_0_type == 'Peak':  ## for a up hub
             is_new_hub = min(factor_0, factor_2) > max(factor_1, factor_3)
             if is_new_hub:
                 hub_high = min(factor_0, factor_2)
                 hub_low = max(factor_1, factor_3)
-        return is_new_hub, hub_high, hub_low
+                true_high = max(factor_0, factor_2)
+                true_low = min(factor_1, factor_3)
+        return is_new_hub, hub_high, hub_low, true_high, true_low
 
     def check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
         if factor_cur_type == 'Valley':
-            if factor_cur_value > cur_hub['high']:
+            if factor_cur_value > cur_hub['hub_high']:
                 return False
             else:
                 return True
         elif factor_cur_type == 'Peak':
-            if factor_cur_value < cur_hub['low']:
+            if factor_cur_value < cur_hub['hub_low']:
                 return False
             else:
                 return True
@@ -130,7 +136,7 @@ def find_hubs(df_PV_segments):
         if not in_hub:
 
             # Determine if the first three lines (current and next two factors) form a hub
-            is_new_hub, hub_high, hub_low = check_new_hub_formation(factor_0_type, factor_0, factor_1, factor_2, factor_3)
+            is_new_hub, hub_high, hub_low, true_high, true_low = check_new_hub_formation(factor_0_type, factor_0, factor_1, factor_2, factor_3)
 
             # if no new hub can be formed, continue to the next iteration
             if not is_new_hub:
@@ -138,17 +144,16 @@ def find_hubs(df_PV_segments):
 
             # otherwise, define the new hub
             else:
-
                 # if a new hub can be formed, first check its direction
                 if len(list_hubs) == 0:
                     cur_hub_direction = 'down' if factor_0_type =='Valley' else 'up'
                 else:
-                    if hub_low > list_hubs[-1]['low']:
+                    if hub_low > list_hubs[-1]['hub_low']:
                         cur_hub_direction = 'up'
-                    elif hub_high < list_hubs[-1]['high']:
+                    elif hub_high < list_hubs[-1]['hub_high']:
                         cur_hub_direction = 'down'
 
-                # verify the start factor fits the hub direction
+                # verify the starting factor fits the hub direction
                 # if wrong, then continue to the next candle
                 if (cur_hub_direction == 'up') & (factor_0_type == 'Valley') or\
                     (cur_hub_direction == 'down') & (factor_0_type == 'Peak'):
@@ -162,8 +167,11 @@ def find_hubs(df_PV_segments):
                                'all_idx': [factor_0_idx, factor_1_idx, factor_2_idx, factor_3_idx],
                                'num_segments': 3,
                                'direction': cur_hub_direction,
-                               'high': hub_high,
-                               'low': hub_low}
+                               'hub_high': hub_high,
+                               'hub_low': hub_low,
+                               'true_high': true_high,
+                               'true_low': true_low,
+                               }
 
                 # continue to check if the next few factors belong to this hub
                 for j in range(i + 4, len(df_PV_segments)):
@@ -172,12 +180,16 @@ def find_hubs(df_PV_segments):
                     factor_cur_type = df_PV_segments.iloc[j]['pv_type']
 
                     # first check if the current factor is part of the current hub
+                    # if the current factor is the last factor, then it belongs to the current hub
                     if j == len(df_PV_segments) - 1:
 
-                        # if the current factor is the last factor, then it belongs to the current hub
                         cur_hub['end_idx'] = factor_cur_idx
                         cur_hub['num_segments'] += 1
                         cur_hub['all_idx'].append(factor_cur_idx)
+                        if factor_cur_type == 'Valley':
+                            cur_hub['true_low'] = min(cur_hub['true_low'], factor_cur_value)
+                        elif factor_cur_type == 'Peak':
+                            cur_hub['true_high'] = max(cur_hub['true_high'], factor_cur_value)
 
                         # manually close the hub
                         in_hub = False
@@ -186,13 +198,16 @@ def find_hubs(df_PV_segments):
                         # debug_logging(f'Hub breaks at {factor_cur_idx}')
                         break
 
+                    # if the current factor belongs to the current hub, then update the hub
                     else:
-                        # if the current factor belongs to the current hub, then update the hub
                         if check_current_hub_belonging(cur_hub, factor_cur_type, factor_cur_value):
                             cur_hub['end_idx'] = factor_cur_idx
                             cur_hub['num_segments'] += 1
                             cur_hub['all_idx'].append(factor_cur_idx)
-
+                            if factor_cur_type == 'Valley':
+                                cur_hub['true_low'] = min(cur_hub['true_low'], factor_cur_value)
+                            elif factor_cur_type == 'Peak':
+                                cur_hub['true_high'] = max(cur_hub['true_high'], factor_cur_value)
 
                         else:
                             # hub breaks
@@ -229,17 +244,7 @@ def find_hubs(df_PV_segments):
                                 list_hubs.append(cur_hub)
                                 break
 
-
-
-    # print(list_hubs)
     df_hubs = pd.DataFrame(list_hubs)
-
-    # --- Visualization
-    # if debug_plot:
-        # debug_plot_hubs_using_HL(df_PV_segments, df_HL, df_hubs)
-        # debug_plot_hubs_using_OHLC(df_PV_segments, df_OHLC, df_hubs)
-    # fig_hubs = debug_plot_hubs(df_PV_segments, df_HL, df_OHLC, df_hubs)
-
     return df_hubs
 
 def remove_include(k1: NewBar, k2: NewBar, k3: RawBar):
@@ -361,7 +366,7 @@ def check_bi(bars: List[NewBar], benchmark=None):
     :return:
     """
     # min_bi_len = envs.get_min_bi_len()
-    min_bi_len = 7
+    min_bi_len = 6
     fxs = check_fxs(bars)
     if len(fxs) < 2:
         return None, bars
@@ -425,15 +430,6 @@ class CZSC:
         self.bi_hubs: List[BiHub] = []
         self.symbol = symbol
         self.freq = freq
-        # self.signals = None
-        # self.chart = None
-
-        # self.fx_list: List[FX] = []
-        # self.line_list: List[Line] = []
-        # self.line_hubs: List[LineHub] = []
-
-        # # cache 是信号计算过程的缓存容器，需要信号计算函数自行维护
-        # self.cache = OrderedDict()
 
         # 完成笔的处理
         for bar in bars:
@@ -577,19 +573,28 @@ class CZSC:
         else:
             hub_cur = df_hubs.iloc[-1]
 
+        # We additionally want the current hub to have >=4 bis
+        if hub_cur['num_segments'] < 5:
+            return 0, 'No valid setup'
+
         # Check if the current candle is in the last hub (in terms of time)
-        cur_datetime_dt = datetime.strptime(cur_datetime, '%Y-%m-%d %H:%M:%S+00:00')
-        hub_cur_end_dt = datetime.strptime(hub_cur.end_idx, '%Y-%m-%d %H:%M:%S+00:00')
+        cur_datetime_dt = cur_datetime
+        hub_cur_end_dt = hub_cur.end_idx
         if cur_datetime_dt > hub_cur_end_dt:
             return 0, 'Time is not up-to-date!'
 
-        # --- Check the relation between the two hubs
-        # Case 1 - the last hub is higher than the previous hub (up trend)
+        # Check the POWAYSHA setup
+        low_thres_1 = hub_cur['true_low'] + 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
+        low_thres_2 = hub_cur['hub_low'] + 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
+        high_thres_1 = hub_cur['true_high'] - 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
+        high_thres_2 = hub_cur['hub_high'] - 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
 
-        if cur_low < hub_cur['low'] and pre_low > hub_cur['low']:
+        if ((cur_low < low_thres_1 and pre_low > low_thres_1) or
+                (cur_low < low_thres_2 and pre_low > low_thres_2)):
             msg = 'Hub lower range broken'
             signal = 1
-        elif cur_high > hub_cur['high'] and pre_high < hub_cur['high']:
+        elif ((cur_high > high_thres_1 and pre_high < high_thres_1) or
+              (cur_high > high_thres_2 and pre_high < high_thres_2)):
             msg = 'Hub upper range broken'
             signal = -1
         else:
@@ -620,47 +625,46 @@ class CZSC:
         # --- Check the relation between the two hubs
         # Case 1 - the last hub is higher than the previous hub (up trend)
         msg = 'No valid setup'
-        if hub_cur['high'] > hub_prev['high'] > hub_prev_prev['high']:  # up trending hubs
-            if cur_price < hub_cur['low'] and cur_price > hub_prev['high']:
+        if hub_cur['hub_high'] > hub_prev['hub_high'] > hub_prev_prev['hub_high']:  # up trending hubs
+            if cur_price < hub_cur['hub_low'] and cur_price > hub_prev['hub_high']:
                 msg = 'Pullback long setup'
                 return 1, msg  # pullback long setup
             else:
                 return 0, msg  # no valid setup
         # Case 2 - the last hub is lower than the previous one (down trend)
-        elif hub_cur['low'] < hub_prev['low'] < hub_prev_prev['low']:  # down trending hubs
-            if cur_price > hub_cur['high'] and cur_price < hub_prev['low']:
+        elif hub_cur['hub_low'] < hub_prev['hub_low'] < hub_prev_prev['hub_low']:  # down trending hubs
+            if cur_price > hub_cur['hub_high'] and cur_price < hub_prev['hub_low']:
                 msg = 'Pullback short setup'
                 return -1, msg  # pullback short setup
             else:
                 return 0, msg  # no valid setup
 
-    def to_echarts(self, width: str = "1400px", height: str = '580px', bs=[]):
-        """绘制K线分析图
-
-        :param width: 宽
-        :param height: 高
-        :param bs: 交易标记，默认为空
-        :return:
-        """
-        kline = [x.__dict__ for x in self.bars_raw]
-        if len(self.bi_list) > 0:
-            bi = [{'dt': x.fx_a.dt, "bi": x.fx_a.fx} for x in self.bi_list] + \
-                 [{'dt': self.bi_list[-1].fx_b.dt, "bi": self.bi_list[-1].fx_b.fx}]
-            fx = [{'dt': x.dt, "fx": x.fx} for x in self.fx_list]
-        else:
-            bi = []
-            fx = []
-        chart = kline_pro(kline, bi=bi, fx=fx, width=width, height=height, bs=bs,
-                          title="{}-{}".format(self.symbol, ''))
-        return chart
+    # def to_echarts(self, width: str = "1400px", height: str = '580px', bs=[]):
+    #     """绘制K线分析图
+    #
+    #     :param width: 宽
+    #     :param height: 高
+    #     :param bs: 交易标记，默认为空
+    #     :return:
+    #     """
+    #     kline = [x.__dict__ for x in self.bars_raw]
+    #     if len(self.bi_list) > 0:
+    #         bi = [{'dt': x.fx_a.dt, "bi": x.fx_a.fx} for x in self.bi_list] + \
+    #              [{'dt': self.bi_list[-1].fx_b.dt, "bi": self.bi_list[-1].fx_b.fx}]
+    #         fx = [{'dt': x.dt, "fx": x.fx} for x in self.fx_list]
+    #     else:
+    #         bi = []
+    #         fx = []
+    #     chart = kline_pro(kline, bi=bi, fx=fx, width=width, height=height, bs=bs,
+    #                       title="{}-{}".format(self.symbol, ''))
+    #     return chart
 
     def to_plotly(self):
         """使用 plotly 绘制K线分析图"""
-        import pandas as pd
 
         bi_list = self.bi_list
         df = pd.DataFrame(self.bars_raw)
-        kline = KlineChart(n_rows=4, title="{}-{}".format(self.symbol, self.freq))
+        kline = KlineChart(n_rows=4, title="{}-{}".format(self.symbol, self.freq), height="800px", width="100%")
         kline.add_kline(df, name="")
         # kline.add_sma(df, ma_seq=(5, 10, 21), row=1, visible=True, line_width=1.2)
         # kline.add_sma(df, ma_seq=(34, 55, 89, 144), row=1, visible=False, line_width=1.2)
@@ -672,7 +676,7 @@ class CZSC:
             bi1 = [{'dt': x.fx_a.dt, "bi": x.fx_a.fx, "text": x.fx_a.mark.value} for x in bi_list]
             bi2 = [{'dt': bi_list[-1].fx_b.dt, "bi": bi_list[-1].fx_b.fx, "text": bi_list[-1].fx_b.mark.value[0]}]
             bi = pd.DataFrame(bi1 + bi2)
-            fx = pd.DataFrame([{'dt': x.dt, "fx": x.fx} for x in self.fx_list])
+            # fx = pd.DataFrame([{'dt': x.dt, "fx": x.fx} for x in self.fx_list])
             # kline.add_scatter_indicator(fx['dt'], fx['fx'], name="分型", row=1, line_width=1)
             kline.add_scatter_indicator(bi['dt'], bi['bi'], name="笔", text=bi['text'], row=1, line_width=2)
 
@@ -687,7 +691,7 @@ class CZSC:
                 rect = go.layout.Shape(
                     type="rect",
                     x0=bi_hub.start_idx, x1=bi_hub.end_idx,
-                    y0=bi_hub.low, y1=bi_hub.high,
+                    y0=bi_hub.hub_low, y1=bi_hub.hub_high,
                     line=dict(width=2),
                     fillcolor="LightSkyBlue",
                     opacity=0.5,
@@ -702,7 +706,6 @@ class CZSC:
         kline.fig.update_layout(shapes=existing_shapes)
 
         return kline.fig
-
 
     def open_in_browser(self, width: str = "1400px", height: str = '580px'):
         """直接在浏览器中打开分析结果
@@ -799,13 +802,16 @@ def main(df_OHLC_mid,
     bars = convert_df_to_bars(df_OHLC_mid, time_frame, name_symbol)
 
     # initialize the Chan Analysis object
-    chanlun = CZSC(bars,
-                   symbol=name_symbol,
-                   freq=time_frame,
-                   )
+    try:
+        chanlun = CZSC(bars,
+                       symbol=name_symbol,
+                       freq=time_frame,
+                       )
+    except Exception as e:
+        print(f'Error in initializing CZSC: {e}')
+        return 0, []
 
-    # plot using to_echarts
-    # chanlun.chart = chanlun.to_echarts()
+    # make plots
     chanlun.chart = chanlun.to_plotly()
 
     return chanlun.decision, chanlun.chart

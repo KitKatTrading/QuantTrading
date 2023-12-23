@@ -542,7 +542,7 @@ class KlineChart:
 
         # https://plotly.com/python/reference/layout/
         fig.update_layout(
-            title=dict(text=kwargs.get('title', ''), yanchor='top'),
+            title=dict(text=kwargs.get('title', ''), yanchor='middle', xanchor='center'),
             margin=go.layout.Margin(
                 l=0,  # left margin
                 r=0,  # right margin
@@ -550,14 +550,14 @@ class KlineChart:
                 t=0   # top margin
             ),
             # https://plotly.com/python/reference/layout/#layout-legend
-            legend=dict(orientation='h', yanchor="top", y=1.05, xanchor="left", x=0, bgcolor='rgba(0,0,0,0)'),
+            # legend=dict(orientation='h', yanchor="top", y=1.05, xanchor="center", x=0, bgcolor='rgba(0,0,0,0)'),
+            legend=dict(orientation='h', yanchor="top", y=1.05, xanchor="right", x=0.5, bgcolor='rgba(0,0,0,0)'),
             template="plotly_dark",
             hovermode="x unified",
             hoverlabel=dict(bgcolor='rgba(255,255,255,0.1)', font=dict(size=20)),  # 透明，更容易看清后面k线
             dragmode='pan',
             legend_title_font_color="red",
-            height=kwargs.get('height', 900),
-        )
+           )
 
         self.fig = fig
 
