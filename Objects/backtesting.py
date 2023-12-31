@@ -4,9 +4,6 @@ from tqdm import tqdm
 from datetime import datetime, timedelta
 from Objects.strategy import Strategy
 
-# dir_data = 'module_data'
-dir_data = 'module_data_demo'
-dir_backtesting = 'D:\\module_backtesting'
 
 def convert_to_higher_timeframe(cur_date_low_timeframe, higher_timeframe):
 
@@ -68,13 +65,15 @@ class Backtesting:
     def __init__(self, name_symbol, data_source, name_strategy,
                  save_plot, save_csv, timeframe_high, timeframe_mid, timeframe_low,
                  function_high_timeframe, function_mid_timeframe, function_low_timeframe,
-                 bt_start_date, bt_end_date):
+                 dir_data, dir_backtesting, bt_start_date, bt_end_date):
 
         self.name_symbol = name_symbol
         self.data_source = data_source
         self.name_strategy = name_strategy
         self.save_plot = save_plot
         self.save_csv = save_csv
+        self.dir_data = dir_data
+        self.dir_backtesting = dir_backtesting
         self.bt_start_date = bt_start_date
         self.bt_end_date = bt_end_date
         self.timeframe_high = timeframe_high

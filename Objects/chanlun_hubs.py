@@ -366,7 +366,7 @@ def check_bi(bars: List[NewBar], benchmark=None):
     :return:
     """
     # min_bi_len = envs.get_min_bi_len()
-    min_bi_len = 6
+    min_bi_len = 7
     fxs = check_fxs(bars)
     if len(fxs) < 2:
         return None, bars
@@ -560,6 +560,7 @@ class CZSC:
     def pattern_setup_single_hub_poway(self, df_hubs, cur_datetime):
         """ This function identifies the "powei sha" trading strategy"""
         """ v0. 2023/12/21 Initial Release"""
+        """ v1. 2023/12/31 Refined the setup for the hub length and range"""
 
         # get the last two bar values
         cur_low = self.bars[-1].low
@@ -583,18 +584,16 @@ class CZSC:
         if cur_datetime_dt > hub_cur_end_dt:
             return 0, 'Time is not up-to-date!'
 
-        # Check the POWAYSHA setup
-        low_thres_1 = hub_cur['true_low'] + 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
-        low_thres_2 = hub_cur['hub_low'] + 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
-        high_thres_1 = hub_cur['true_high'] - 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
-        high_thres_2 = hub_cur['hub_high'] - 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
+        # Check the POWAYSHA setup - allow 0.02 hub height
+        low_thres_1 = hub_cur['true_low'] - 0.02 * (hub_cur['true_high'] - hub_cur['true_low'])
+        # low_thres_2 = hub_cur['hub_low'] + 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
+        high_thres_1 = hub_cur['true_high'] - 0.02 * (hub_cur['true_high'] - hub_cur['true_low'])
+        # high_thres_2 = hub_cur['hub_high'] - 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
 
-        if ((cur_low < low_thres_1 and pre_low > low_thres_1) or
-                (cur_low < low_thres_2 and pre_low > low_thres_2)):
+        if cur_low < low_thres_1 and pre_low > low_thres_1:
             msg = 'Hub lower range broken'
             signal = 1
-        elif ((cur_high > high_thres_1 and pre_high < high_thres_1) or
-              (cur_high > high_thres_2 and pre_high < high_thres_2)):
+        elif cur_high > high_thres_1 and pre_high < high_thres_1:
             msg = 'Hub upper range broken'
             signal = -1
         else:

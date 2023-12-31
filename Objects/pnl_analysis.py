@@ -1,8 +1,10 @@
 import pandas as pd
 import os
 
-dir_data = 'module_data'
-dir_backtesting = 'module_backtesting'
+# read the config file "config_local_path.py"
+import config_local_path
+dir_data = config_local_path.gvars['dir_module_data_crypto_binance']
+dir_backtesting = config_local_path.gvars['dir_module_backtest']
 
 # Setting pandas display options for better data visibility
 pd.set_option('display.max_columns', None)

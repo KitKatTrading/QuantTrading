@@ -1,6 +1,11 @@
 from Objects.backtesting import *
 from Objects.pnl_analysis import *
 
+# read the config file "config_local_path.py"
+import config_local_path
+dir_data = config_local_path.gvars['dir_module_data_crypto_binance']
+dir_backtesting = config_local_path.gvars['dir_module_backtest']
+
 # get the current datetime
 datetime_now_str = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
 datetime_now = datetime.utcnow()
@@ -9,17 +14,21 @@ datetime_now_rounded = datetime_now_rounded.strftime("%Y-%m-%d %H:%M:%S+00:00")
 
 if __name__ == '__main__':
 
-    # Define the strategy
-    name_strategy_high_timeframe = 'always_short'
-    # name_strategy_high_timeframe = 'SMA_5_10_20_trend'
-    timeframe_high = '1h'
-    name_strategy_mid_timeframe = 'chanlun'
+    # Define the strategy - high timeframe for bias
+    name_strategy_high_timeframe = 'SMA_price_10_20_trend'
+    timeframe_high = '1d'
+
+    # Define the strategy - mid timeframe for pattern
+    name_strategy_mid_timeframe = 'chanlun_poway'
     timeframe_mid = '1h'
+
+    # Define the strategy - low timeframe for entry
     name_strategy_low_timeframe = 'RSI_extreme_cross'
     timeframe_low = '1h'
 
     # Define the backtesting start and end dates
     bt_start_date = "2021-01-01 00:00:00+00:00"
+    bt_start_date = "2023-01-01 00:00:00+00:00"
     bt_end_date = datetime_now_rounded
 
     # Define the name of the backtesting
@@ -41,7 +50,7 @@ if __name__ == '__main__':
                     'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
     # names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'INJUSDT', 'OPUSDT']
     # names_symbol = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'RUNEUSDT', 'OPUSDT', 'AVAXUSDT']
-    # names_symbol = ['BTCUSDT']
+    names_symbol = ['BTCUSDT', 'OPUDST', 'NEARUSDT', 'SOLUSDT', 'AVAXUSDT']
 
     # initialize master dataframe for all symbols
     df_master = pd.DataFrame(columns=['name_symbol', 'num_trades', 'num_wins', 'num_losses', 'num_breakeven',
@@ -61,6 +70,8 @@ if __name__ == '__main__':
                                       function_high_timeframe=name_strategy_high_timeframe,
                                       function_mid_timeframe=name_strategy_mid_timeframe,
                                       function_low_timeframe=name_strategy_low_timeframe,
+                                      dir_data=dir_data,
+                                      dir_backtesting=dir_backtesting,
                                       bt_start_date=bt_start_date,
                                       bt_end_date=bt_end_date)
                                       # bt_end_date='2023-07-01 00:00:00+00:00')
@@ -104,7 +115,7 @@ if __name__ == '__main__':
 
         except:
             print(f"Error processing {name_symbol}.")
-    df_master.to_csv(os.path.join('module_backtesting', name_backtesting, 'backtesting_results.csv'), index=False)
+    df_master.to_csv(os.path.join(dir_backtesting, name_backtesting, 'backtesting_results.csv'), index=False)
 
     # Run pnl analysis
     pnl_analysis = PNL(job_name=backtesting.backtesting_dir_strategy,
