@@ -23,12 +23,11 @@ if __name__ == '__main__':
     timeframe_mid = '1h'
 
     # Define the strategy - low timeframe for entry
-    name_strategy_low_timeframe = 'RSI_extreme_cross'
+    name_strategy_low_timeframe = 'new_high_low'
     timeframe_low = '1h'
 
     # Define the backtesting start and end dates
     bt_start_date = "2021-01-01 00:00:00+00:00"
-    bt_start_date = "2023-01-01 00:00:00+00:00"
     bt_end_date = datetime_now_rounded
 
     # Define the name of the backtesting
@@ -78,7 +77,7 @@ if __name__ == '__main__':
 
             # Identify the entries
             print("-- identifying entries...")
-            backtesting.find_entries_vectorize_high_low(manual_review_each_trade=False)
+            backtesting.find_entries_vectorize_high(manual_review_each_trade=False)
 
             # Execute the trades
             print("-- executing trades...")

@@ -399,6 +399,181 @@ class Backtesting:
 
         return df_entry_log
 
+    def find_entries_vectorize_high(self,
+                                    manual_review_each_trade,
+                                    num_counter_max=10, # number of candles for the activated pattern to enter the trade
+                                    ):
+        """ Run the backtesting using vectorized high timeframe module only """
+
+        ### SECTION 0 - Get all dataframes
+        # High timeframe directional module
+        file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_high + '.csv')
+        df_OHLC_high = pd.read_csv(file_path, index_col=0)
+        df_OHLC_high = df_OHLC_high.loc[self.bt_start_date: self.bt_end_date]
+        self.df_OHLC_high = df_OHLC_high
+
+        # Mid timeframe pattern module
+        file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_mid + '.csv')
+        df_OHLC_mid = pd.read_csv(file_path, index_col=0)
+        df_OHLC_mid = df_OHLC_mid.loc[self.bt_start_date: self.bt_end_date]
+        self.df_OHLC_mid = df_OHLC_mid
+
+        # Low timeframe entry module
+        file_path = os.path.join(self.data_dir, self.name_symbol + '_' + self.timeframe_low + '.csv')
+        df_OHLC_low = pd.read_csv(file_path, index_col=0)
+        df_OHLC_low = df_OHLC_low.loc[self.bt_start_date: self.bt_end_date]
+        self.df_OHLC_low = df_OHLC_low
+
+        ### SECTION 1 - Preprocessing the entry signals that can be vectorized
+        print(f"--- evaluating {len(df_OHLC_high)} candles for vectorized high timeframe directional module...")
+        df_decision_direction = self.strategy.strategy_high_timeframe.main(df_OHLC_high, run_mode='backtest')
+        print(f"--- completed!")
+
+        ### ------------ Iterations for backtesting ------------ ###
+        """ Since we have vectorized the direction module, we should only loop through valid high timeframe durations """
+
+        # Initialize the entry log, or read from existing csv
+        df_entry_log = pd.DataFrame(columns=['entry_number', 'datetime_entry', 'direction', 'entry_price',
+                                             'decision_direction', 'decision_pattern', 'decision_entry',
+                                             'decision_final'])
+
+        # set the state variables
+        num_entry = 0
+        num_counter = -1
+        datetime_low_timeframe_test_start = None
+        anticipated_trade_direction = None
+
+        # now start the loop
+        print(f"--- evaluating {len(df_OHLC_low)} candles for low timeframe entry module...")
+        for _, datetime_low in tqdm(enumerate(df_OHLC_low.index), total=len(df_OHLC_low)):
+
+            # get the current low timeframe datetime
+            cur_date_low_timeframe = datetime_low
+            # print(cur_date_low_timeframe, num_counter)
+
+            # if the counter is not activated, then we need to check the direction and pattern modules
+            if num_counter < 0:
+
+                # reset the state variables
+                datetime_low_timeframe_test_start = None
+                anticipated_trade_direction = None
+
+                # first check if the direction module is valid
+                cur_date_high_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_high)
+                cur_date_high_timeframe = cur_date_high_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
+                try:
+                    decision_direction = df_decision_direction['decision'].loc[cur_date_high_timeframe]
+                    if decision_direction == 0:
+                        continue
+                    df_entry_log['decision_direction'].loc[cur_date_low_timeframe] = decision_direction
+                except:
+                    continue
+
+                # then check pattern module
+                cur_date_mid_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_mid)
+                cur_date_mid_timeframe = cur_date_mid_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
+                df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe].copy()
+                try:
+                    decision_pattern, _ = (
+                        self.strategy.strategy_mid_timeframe.main(
+                            df_OHLC_mid_temp,
+                            name_symbol=self.name_symbol,
+                            time_frame=self.timeframe_mid,
+                            num_candles=500,
+                        ))
+                    if decision_pattern == 0:
+                        continue
+                except:
+                    continue
+
+                # now process combined high and mid timeframe decisions
+                if decision_pattern * decision_direction != 1:
+                    continue
+
+
+                # only when pattern and direction aligns, proceed
+                num_counter = num_counter_max
+                datetime_low_timeframe_test_start = cur_date_low_timeframe
+                if decision_pattern == 1:
+                    anticipated_trade_direction = 'long'
+                elif decision_pattern == -1:
+                    anticipated_trade_direction = 'short'
+
+            ### This is the case when the counter is already activated, meaning it is anticipating a trade trigger
+            else:
+                print(num_counter)
+                # first update the counter and assert things
+                num_counter -= 1
+                assert datetime_low_timeframe_test_start is not None
+                assert anticipated_trade_direction is not None
+
+                # now check the entry module
+                df_OHLC_low_temp = df_OHLC_low.loc[datetime_low_timeframe_test_start: datetime_low].copy()
+                decision_entry, idx\
+                    = self.strategy.strategy_low_timeframe.main(df_OHLC_low_temp,
+                                                                anticipated_trade_direction=anticipated_trade_direction,
+                                                                num_new_high_low_candles_for_trigger=1,
+                                                                run_mode='live')
+
+                # check if entry decision is met
+                if decision_entry == 0:
+                    continue
+                else:
+                    if decision_entry == 1 and anticipated_trade_direction == 'long':
+                        decision_final = 1
+                        trade_direction = 'long'
+                        num_counter = -1
+                        datetime_low_timeframe_test_start = None
+                        anticipated_trade_direction = None
+                    elif decision_entry == -1 and anticipated_trade_direction == 'short':
+                        decision_final = -1
+                        trade_direction = 'short'
+                        num_counter = -1
+                        datetime_low_timeframe_test_start = None
+                        anticipated_trade_direction = None
+                    else:
+                        continue
+
+                # re-run the pattern module to update the plot
+                cur_date_mid_timeframe = convert_to_higher_timeframe(cur_date_low_timeframe, self.timeframe_mid)
+                cur_date_mid_timeframe = cur_date_mid_timeframe.strftime('%Y-%m-%d %H:%M:%S+00:00')
+                df_OHLC_mid_temp = df_OHLC_mid.loc[:cur_date_mid_timeframe].copy()
+                decision_pattern, fig_hubs_updated_at_entry = self.strategy.strategy_mid_timeframe.main(
+                        df_OHLC_mid_temp,
+                        name_symbol=self.name_symbol,
+                        time_frame=self.timeframe_mid,
+                        num_candles=500,
+                    )
+
+                # update the entry log if there is a valid final decision
+                num_entry += 1
+                new_row = {
+                    'entry_number': num_entry,
+                    'datetime_entry': cur_date_low_timeframe,
+                    'decision_pattern': decision_pattern,
+                    'decision_direction': decision_direction,
+                    'decision_entry': decision_entry,
+                    'decision_final': decision_final,
+                    'entry_price': df_OHLC_low['Close'].loc[cur_date_low_timeframe],
+                    'direction': trade_direction
+                }
+
+                # save the html plot
+                if self.save_plot:
+                    fig_hubs_updated_at_entry.write_html(
+                        os.path.join(self.backtesting_dir_symbol, f"Entry_{num_entry}_setup.html"))
+
+                # expand the dataframe
+                df_entry_log = pd.concat([df_entry_log, pd.DataFrame(new_row, index=[num_entry])])
+
+        ### completed all entries, save the entry log
+        df_entry_log.dropna(inplace=True)
+        df_entry_log.to_csv(
+            os.path.join(self.backtesting_dir_strategy, f"df_final_entry_{self.name_strategy}_{self.name_symbol}.csv"))
+        self.df_entry_log = df_entry_log
+
+        return df_entry_log
+
     def execute_trades(self,
                        df_entry_log=None,
                        stop_type="recent_pivot",

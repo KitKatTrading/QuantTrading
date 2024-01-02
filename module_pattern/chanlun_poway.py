@@ -22,8 +22,13 @@ def main(df_OHLC_mid,
                        )
         # chanlun.chart = chanlun.to_echarts()
         chanlun.chart = chanlun.to_plotly()
-        # chanlun.chart.show()
+
         return chanlun.decision, chanlun.chart
+
+        # if chanlun.decision != 0:
+        #     return chanlun.decision, chanlun.chart
+        # else:
+        #     return 0, None
 
     except Exception as e:
         print(e)
