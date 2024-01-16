@@ -28,10 +28,9 @@ Output of this module is:
 **2.2. Pattern recognition module**
 
 At a medium timeframe (1h), the specific trading pattern will be explored. This is what typical trading strategy refers to. Specific strategies could be:
-* Chanlun 缠论
-* Channel rangebound 通道区间
-* Support & Resistance 支持阻力
-* Wakeng 挖坑战法
+* Chanlun
+* Channel rangebound 
+* Support & Resistance 
 
 Input to this module is:
 * Most recent N=100 candlesticks (OHLC + volume)
