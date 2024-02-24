@@ -101,12 +101,13 @@ if __name__ == '__main__':
         print(name_symbol)
 
         # download data live
-        # set timer
         t1 = time.time()
         data = get_crypto_OHLC_from_binance_live(symbol=name_symbol, time_scale=time_scale, num_recent_candles=1000)
         t2 = time.time()
         print(f'Time to download data: {t2 - t1} seconds')
 
+
+        # run strategy
         strategy_chanlun = Strategy(name_symbol=name_symbol, data_source='binance', name_strategy='chanlun_poway',
                                     timeframe_high=time_scale, timeframe_mid=time_scale, timeframe_low=time_scale,
                                     function_high_timeframe='always_long',
@@ -117,9 +118,8 @@ if __name__ == '__main__':
 
         # run the strategy - do this first
         trading_decision = strategy_chanlun.check_ultimate_decision_all_modules()
-        print(f'Trading decision: {trading_decision}')
 
-        # get decision
+        # get modular decision
         decision_direction = strategy_chanlun.decision_direction
         decision_pattern, fig_pattern = strategy_chanlun.decision_pattern
         decision_entry, fig_entry = strategy_chanlun.decision_entry
