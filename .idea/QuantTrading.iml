@@ -5,7 +5,7 @@
       <excludeFolder url="file://$MODULE_DIR$/module_backtesting" />
       <excludeFolder url="file://$MODULE_DIR$/module_data" />
     </content>
-    <orderEntry type="jdk" jdkName="quant_trading_crypto_binance_2023" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="QuantTrading" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyNamespacePackagesService">

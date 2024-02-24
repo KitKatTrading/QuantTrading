@@ -4,7 +4,7 @@ import importlib
 
 # read the config file "config_local_path.py"
 import config_local_path
-PATH_DATA = config_local_path.gvars['dir_module_data_crypto_binance']
+PATH_DATA = config_local_path.gvars['dir_module_data_crypto_binance_live']
 
 
 
@@ -24,10 +24,9 @@ class Strategy:
         self.high_timeframe_analysis = None
         self.mid_timeframe_analysis = None
         self.low_timeframe_analysis = None
-        self.direction_module_decision = 0
-        self.pattern_module_decision = 0
-        self.entry_module_decision = 0
-
+        self.decision_direction = 0
+        self.decision_pattern = 0
+        self.decision_entry = 0
 
         # Set data directory based on data source
         if self.data_source == 'binance':
@@ -47,7 +46,7 @@ class Strategy:
             df_OHLC_high = df_OHLC_high
 
         # Call the 'main' function from the strategy module
-        self.direction_module_decision = self.strategy_high_timeframe.main(df_OHLC_high)
+        self.decision_direction = self.strategy_high_timeframe.main(df_OHLC_high)
 
     def run_pattern_module(self, use_default_data=True, df_OHLC_mid=None):
 
@@ -58,7 +57,7 @@ class Strategy:
             df_OHLC_mid = df_OHLC_mid
 
         # Call the 'main' function from the strategy module
-        self.pattern_module_decision = self.strategy_mid_timeframe.main(df_OHLC_mid,
+        self.decision_pattern = self.strategy_mid_timeframe.main(df_OHLC_mid,
                                                                         name_symbol=self.name_symbol,
                                                                         time_frame=self.timeframe_mid)
 
@@ -71,7 +70,7 @@ class Strategy:
             df_OHLC_low = df_OHLC_low
 
         # Call the 'main' function from the strategy module
-        self.entry_module_decision = self.strategy_low_timeframe.main(df_OHLC_low)
+        self.decision_entry = self.strategy_low_timeframe.main(df_OHLC_low)
 
     def check_ultimate_decision_all_modules(self):
         """ This function checks the trading decision based on all three modules"""
@@ -80,21 +79,24 @@ class Strategy:
         # directional module analysis
         self.run_direction_module_live()
 
+        # DEBUG - run entry module before even needed to check if it works
+        self.run_entry_module()
+
         # only run pattern analysis if directional module analysis is not 0
-        if self.direction_module_decision != 0:
+        if self.decision_direction != 0:
             self.run_pattern_module()
 
             # only run trade entry module if both directional and pattern modules are meaningful:
-            if self.pattern_module_decision * self.direction_module_decision == 1:
+            if self.decision_pattern * self.decision_direction == 1:
                 self.run_entry_module()
 
                 # Checking long setup opportunity:
-                if self.direction_module_decision == 1 and self.pattern_module_decision == 1 and self.entry_module_decision == 1:
+                if self.decision_direction == 1 and self.decision_pattern == 1 and self.decision_entry == 1:
                     print('Long trading opportunity')
                     trading_decision = 1
 
                 # Checking short setup opportunity:
-                elif self.direction_module_decision == -1 and self.pattern_module_decision == -1 and self.entry_module_decision == -1:
+                elif self.decision_direction == -1 and self.decision_pattern == -1 and self.decision_entry == -1:
                     print('Short trading opportunity')
                     trading_decision = -1
 
@@ -112,11 +114,11 @@ class Strategy:
         self.run_direction_module_live()
 
         # only run pattern analysis if directional module analysis is not 0
-        if self.direction_module_decision != 0:
+        if self.decision_direction != 0:
             self.run_pattern_module()
 
             # if both directional and pattern modules are ready, update watchlist
-            if self.pattern_module_decision * self.direction_module_decision == 1:
+            if self.decision_pattern * self.decision_direction == 1:
                 trading_setup = 1
 
         return trading_setup
@@ -132,9 +134,9 @@ if __name__ == '__main__':
                                     function_low_timeframe='RSI_divergence')
 
     strategy_chanlun_12h.check_ultimate_decision_all_modules()
-    # print(strategy_chanlun_12h.direction_module_decision)
-    # print(strategy_chanlun_12h.pattern_module_decision)
-    # print(strategy_chanlun_12h.entry_module_decision)
+    # print(strategy_chanlun_12h.decision_direction)
+    # print(strategy_chanlun_12h.decision_pattern)
+    # print(strategy_chanlun_12h.decision_entry)
 
 
 

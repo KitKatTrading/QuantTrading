@@ -366,7 +366,7 @@ def check_bi(bars: List[NewBar], benchmark=None):
     :return:
     """
     # min_bi_len = envs.get_min_bi_len()
-    min_bi_len = 7
+    min_bi_len = 8  ### 笔之间的距离至少为8根K线
     fxs = check_fxs(bars)
     if len(fxs) < 2:
         return None, bars

@@ -34,6 +34,8 @@ def initilize_crypto_OHLC_from_binance(symbol, time_scale):
         '8h': Client.KLINE_INTERVAL_8HOUR,
         '4h': Client.KLINE_INTERVAL_4HOUR,
         '1h': Client.KLINE_INTERVAL_1HOUR,
+        '30m': Client.KLINE_INTERVAL_30MINUTE,
+        '15m': Client.KLINE_INTERVAL_15MINUTE,
         '5m': Client.KLINE_INTERVAL_5MINUTE
     }
     type_binance_interval = interval_map.get(time_scale)
@@ -140,9 +142,10 @@ if __name__ == '__main__':
     # get all binance future symbols
     name_symbols = get_all_binance_future_symbols()
 
-    # check if there are repeated entries
-    # assert len(name_symbols) == len(set(name_symbols)), "There are repeated entries in name_symbols"
+    # remove ones not ending with "USDT"
+    name_symbols = [name_symbol for name_symbol in name_symbols if name_symbol.endswith('USDT')]
 
+    # update data for all symbols
     for name_symbol in name_symbols:
         print(f"Updating {name_symbol} {time_scale}")
         data = update_crypto_OHLC_from_binance(name_symbol, time_scale,
