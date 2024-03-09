@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import importlib
 
-
 class Strategy:
     def __init__(self, name_symbol, data_source, name_strategy, timeframe_high, timeframe_mid, timeframe_low,
                  function_high_timeframe, function_mid_timeframe, function_low_timeframe,
@@ -38,47 +37,53 @@ class Strategy:
 
     def run_pattern_module(self):
         # Call the 'main' function from the strategy module
-        self.decision_pattern = self.strategy_mid_timeframe.main(self.df_OHLC_mid,
-                                                                 name_symbol=self.name_symbol,
-                                                                 time_frame=self.timeframe_mid)
-
+        self.decision_pattern, self.chart_pattern = self.strategy_mid_timeframe.main(self.df_OHLC_mid,
+                                                                                     name_symbol=self.name_symbol,
+                                                                                     time_frame=self.timeframe_mid)
     def run_entry_module(self):
+
         # Call the 'main' function from the strategy module
-        self.decision_entry = self.strategy_low_timeframe.main(self.df_OHLC_low)
+        self.decision_entry, self.chart_entry = self.strategy_low_timeframe.main(self.df_OHLC_low)
 
     def check_ultimate_decision_all_modules(self):
         """ This function checks the trading decision based on all three modules"""
         trading_decision = 0
 
-        # directional module analysis
-        self.run_direction_module_live()
+        # use try and except to catch errors when there is not enough candles for analysis
+        try:
+            # directional module analysis
+            self.run_direction_module_live()
 
-        # DEBUG - run entry module before even needed to check if it works
-        self.run_entry_module()
+            # DEBUG - run entry module before even needed to check if it works
+            self.run_entry_module()
 
-        # only run pattern analysis if directional module analysis is not 0
-        if self.decision_direction != 0:
-            self.run_pattern_module()
+            # only run pattern analysis if directional module analysis is not 0
+            if self.decision_direction != 0:
+                self.run_pattern_module()
 
-            # only run trade entry module if both directional and pattern modules are meaningful:
-            if self.decision_pattern * self.decision_direction == 1:
-                self.run_entry_module()
+                # only run trade entry module if both directional and pattern modules are meaningful:
+                if self.decision_pattern * self.decision_direction == 1:
+                    self.run_entry_module()
 
-                # Checking long setup opportunity:
-                if self.decision_direction == 1 and self.decision_pattern == 1 and self.decision_entry == 1:
-                    print('Long trading opportunity')
-                    trading_decision = 1
+                    # Checking long setup opportunity:
+                    if self.decision_direction == 1 and self.decision_pattern == 1 and self.decision_entry == 1:
+                        print('Long trading opportunity')
+                        trading_decision = 1
 
-                # Checking short setup opportunity:
-                elif self.decision_direction == -1 and self.decision_pattern == -1 and self.decision_entry == -1:
-                    print('Short trading opportunity')
-                    trading_decision = -1
+                    # Checking short setup opportunity:
+                    elif self.decision_direction == -1 and self.decision_pattern == -1 and self.decision_entry == -1:
+                        print('Short trading opportunity')
+                        trading_decision = -1
 
-                # No setup opportunity:
-                else:
-                    print('No trading opportunity')
+                    # No setup opportunity:
+                    else:
+                        print('No trading opportunity')
 
-        return trading_decision
+            return trading_decision
+
+        except Exception as e:
+            print(e)
+            return trading_decision
 
     def check_trading_setup(self):
         """ This function checks the trading setup opportunity, without considering the entry module"""

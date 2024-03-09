@@ -6,8 +6,6 @@ import importlib
 import config_local_path
 PATH_DATA = config_local_path.gvars['dir_module_data_crypto_binance_live']
 
-
-
 class Strategy:
     def __init__(self, name_symbol, data_source, name_strategy, timeframe_high, timeframe_mid, timeframe_low,
                  function_high_timeframe, function_mid_timeframe, function_low_timeframe):

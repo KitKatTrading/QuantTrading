@@ -83,6 +83,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     time_scale = args.time_scale  # Get the timescale from command line arguments
 
+    # time_scale = '1h'
+
     # Get all future symbol names
     import config_binance_vpn
     API_KEY = config_binance_vpn.gvars['API_KEY']
@@ -93,7 +95,7 @@ if __name__ == '__main__':
     name_symbols = [name_symbol for name_symbol in name_symbols if name_symbol[-4:] == 'USDT']
 
     # Single symbol test
-    # name_symbols = ['BTCUSDT', 'ETHUSDT']
+    # name_symbols = ['AXLUSDT']
 
     # run all symbols
     for name_symbol in name_symbols:
