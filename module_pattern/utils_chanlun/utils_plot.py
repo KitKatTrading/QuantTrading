@@ -530,6 +530,7 @@ class KlineChart:
 
         self.color_red = 'rgba(249,41,62,0.7)'
         self.color_green = 'rgba(0,170,59,0.7)'
+        self.color_yellow = 'rgba(255,174,66,0.7)'
         fig = make_subplots(rows=self.n_rows, cols=1, shared_xaxes=True, row_heights=row_heights,
                             horizontal_spacing=0, vertical_spacing=0)
 
@@ -661,20 +662,23 @@ class KlineChart:
         rsi_periods = kwargs.get('rsi_periods', 14)
         line_width = kwargs.get('line_width', 0.6)
         rsi = talib.RSI(df['close'], timeperiod=rsi_periods)
-        rsi_6EMA = talib.EMA(rsi, timeperiod=6)
-        rsi_12EMA = talib.EMA(rsi, timeperiod=12)
+        self.add_bar_indicator(df['dt'], rsi, name="RSI", row=row, color=self.color_yellow, show_legend=True)
+
+        # rsi_6EMA = talib.EMA(rsi, timeperiod=6)
+        # rsi_12EMA = talib.EMA(rsi, timeperiod=12)
         # rsi_21EMA = talib.EMA(rsi, timeperiod=21)
 
-        rsi_offset = rsi - 50
-        rsi_6EMA_offset = rsi_6EMA - 50
-        rsi_12EMA_offset = rsi_12EMA - 50
+        # rsi_offset = rsi - 50
+        # rsi_6EMA_offset = rsi_6EMA - 50
+        # rsi_12EMA_offset = rsi_12EMA - 50
+        # rsi_colors = np.where(rsi_offset > 0, self.color_red, self.color_green)
+        # self.add_scatter_indicator(df['dt'], rsi_6EMA_offset, name="rsi_6EMA", row=row,
+        #                            line_color='white', show_legend=False, line_width=0.6)
+        # self.add_scatter_indicator(df['dt'], rsi_12EMA_offset, name="rsi_12EMA", row=row,
+        #                            line_color='yellow', show_legend=False, line_width=0.6)
+        # self.add_bar_indicator(df['dt'], rsi_offset, name="RSI", row=row, color=rsi_colors, show_legend=True)
+        # self.add_bar_indicator(df['dt'], rsi, name="RSI", row=row, color=rsi_colors, show_legend=True)
 
-        rsi_colors = np.where(rsi_offset > 0, self.color_red, self.color_green)
-        self.add_scatter_indicator(df['dt'], rsi_6EMA_offset, name="rsi_6EMA", row=row,
-                                   line_color='white', show_legend=False, line_width=0.6)
-        self.add_scatter_indicator(df['dt'], rsi_12EMA_offset, name="rsi_12EMA", row=row,
-                                   line_color='yellow', show_legend=False, line_width=0.6)
-        self.add_bar_indicator(df['dt'], rsi_offset, name="RSI", row=row, color=rsi_colors, show_legend=True)
 
     def add_macd(self, kline: pd.DataFrame, row=3, **kwargs):
         """绘制MACD图

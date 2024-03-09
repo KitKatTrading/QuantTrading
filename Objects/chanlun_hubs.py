@@ -584,21 +584,36 @@ class CZSC:
         if cur_datetime_dt > hub_cur_end_dt:
             return 0, 'Time is not up-to-date!'
 
-        # Check the POWAYSHA setup - allow 0.02 hub height
-        low_thres_1 = hub_cur['true_low'] - 0.02 * (hub_cur['true_high'] - hub_cur['true_low'])
-        # low_thres_2 = hub_cur['hub_low'] + 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
-        high_thres_1 = hub_cur['true_high'] - 0.02 * (hub_cur['true_high'] - hub_cur['true_low'])
-        # high_thres_2 = hub_cur['hub_high'] - 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
+        # CRITICAL -  Check the POWAYSHA setup
+        # Use true low or hub low
+        # How much tolerance is allowed
+        tol_offset_from_tip = 0.05
+        # low_thres = hub_cur['true_low'] - 0.02 * (hub_cur['true_high'] - hub_cur['true_low'])
+        low_thres = hub_cur['hub_low'] + tol_offset_from_tip * (hub_cur['true_high'] - hub_cur['true_low'])
+        # high_thres = hub_cur['true_high'] - 0.02 * (hub_cur['true_high'] - hub_cur['true_low'])
+        high_thres = hub_cur['hub_high'] - 0.05 * (hub_cur['true_high'] - hub_cur['true_low'])
 
-        if cur_low < low_thres_1 and pre_low > low_thres_1:
+        # Check if current low is below hub low
+        if cur_low < low_thres:
             msg = 'Hub lower range broken'
             signal = 1
-        elif cur_high > high_thres_1 and pre_high < high_thres_1:
+        elif cur_high > high_thres:
             msg = 'Hub upper range broken'
             signal = -1
         else:
             msg = 'No valid setup'
             signal = 0
+
+        # Check only for first-time hub-broken signal
+        # if cur_low < low_thres and pre_low > low_thres:
+        #     msg = 'Hub lower range broken'
+        #     signal = 1
+        # elif cur_high > high_thres and pre_high < high_thres:
+        #     msg = 'Hub upper range broken'
+        #     signal = -1
+        # else:
+        #     msg = 'No valid setup'
+        #     signal = 0
 
         return signal, msg  # pullback long setup
 
@@ -663,13 +678,13 @@ class CZSC:
 
         bi_list = self.bi_list
         df = pd.DataFrame(self.bars_raw)
-        kline = KlineChart(n_rows=4, title="{}-{}".format(self.symbol, self.freq), height="800px", width="100%")
+        kline = KlineChart(n_rows=3, title="{}-{}".format(self.symbol, self.freq), height="800px", width="600px")
         kline.add_kline(df, name="")
         # kline.add_sma(df, ma_seq=(5, 10, 21), row=1, visible=True, line_width=1.2)
         # kline.add_sma(df, ma_seq=(34, 55, 89, 144), row=1, visible=False, line_width=1.2)
         kline.add_vol(df, row=2)
-        kline.add_macd(df, row=3)
-        kline.add_rsi(df, row=4)
+        # kline.add_macd(df, row=3)
+        kline.add_rsi(df, row=3)
 
         if len(bi_list) > 0:
             bi1 = [{'dt': x.fx_a.dt, "bi": x.fx_a.fx, "text": x.fx_a.mark.value} for x in bi_list]
@@ -811,7 +826,7 @@ def main(df_OHLC_mid,
         return 0, []
 
     # make plots
-    chanlun.chart = chanlun.to_plotly()
+    # chanlun.chart = chanlun.to_plotly()
 
     return chanlun.decision, chanlun.chart
 

@@ -14,19 +14,19 @@ def get_all_binance_future_symbols(API_KEY, API_SECRET):
 if __name__ == '__main__':
 
     # Strategy parameter setting ###
-    time_frame_mid = '1h'
+    time_frame_mid = '4h'
 
     # datetime format
     datetime_format = '%Y-%m-%d %H:%M:%S+00:00'
 
     # # Get all future symbol names
-    import config_binance_vpn
-    API_KEY = config_binance_vpn.gvars['API_KEY']
-    API_SECRET = config_binance_vpn.gvars['API_SECRET']
-    name_symbols = get_all_binance_future_symbols(API_KEY, API_SECRET)
+    # import config_binance_vpn
+    # API_KEY = config_binance_vpn.gvars['API_KEY']
+    # API_SECRET = config_binance_vpn.gvars['API_SECRET']
+    # name_symbols = get_all_binance_future_symbols(API_KEY, API_SECRET)
 
     # single symbol test
-    # name_symbols = ['BTCUSDT', 'ETHUSDT']
+    # name_symbols = ['WLDUSDT']
 
     # run all symbols
     for name_symbol in name_symbols:
@@ -44,10 +44,8 @@ if __name__ == '__main__':
 
         # get decision
         decision_direction = strategy_chanlun.decision_direction
-        decision_pattern, fig_pattern = strategy_chanlun.decision_pattern
-        decision_entry, fig_entry = strategy_chanlun.decision_entry
-        # fig_entry.show()
-        # fig_pattern.show()
+        decision_pattern = strategy_chanlun.decision_pattern
+        decision_entry = strategy_chanlun.decision_entry
 
         # initialize trade direction
         trade_direction = 'None'
@@ -59,6 +57,10 @@ if __name__ == '__main__':
         # save image
         # broadcast to discord
         if trading_decision != 0:
+
+            # get pattern and entry charts
+            fig_pattern = strategy_chanlun.chart_pattern
+            fig_entry = strategy_chanlun.chart_entry
 
             # set up datetime
             datetime_now = datetime.datetime.utcnow()
@@ -82,6 +84,17 @@ if __name__ == '__main__':
             webhook_discord.post(content=message_timescale)
             webhook_discord.post(content=message_direction)
 
+            # send pattern to discord fig_pattern
+            fig_pattern.write_image('fig_pattern.png')
+            webhook_discord.post(
+                file={
+                    "file1": open("fig_pattern.png", "rb"),
+                },
+            )
+            import os
+            os.remove('fig_pattern.png')
+
+
             # send image fig_entry
             fig_entry.write_image('fig_entry.png')
             webhook_discord.post(
@@ -89,8 +102,6 @@ if __name__ == '__main__':
                     "file1": open("fig_entry.png", "rb"),
                 },
             )
-
-            # remove image
             import os
             os.remove('fig_entry.png')
 

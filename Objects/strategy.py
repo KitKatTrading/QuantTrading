@@ -12,6 +12,8 @@ class Strategy:
     def __init__(self, name_symbol, data_source, name_strategy, timeframe_high, timeframe_mid, timeframe_low,
                  function_high_timeframe, function_mid_timeframe, function_low_timeframe):
 
+        self.chart_entry = None
+        self.chart_pattern = None
         self.name_symbol = name_symbol
         self.data_source = data_source
         self.name_strategy = name_strategy
@@ -57,9 +59,9 @@ class Strategy:
             df_OHLC_mid = df_OHLC_mid
 
         # Call the 'main' function from the strategy module
-        self.decision_pattern = self.strategy_mid_timeframe.main(df_OHLC_mid,
-                                                                        name_symbol=self.name_symbol,
-                                                                        time_frame=self.timeframe_mid)
+        self.decision_pattern, self.chart_pattern = self.strategy_mid_timeframe.main(df_OHLC_mid,
+                                                                                     name_symbol=self.name_symbol,
+                                                                                     time_frame=self.timeframe_mid)
 
     def run_entry_module(self, use_default_data=True, df_OHLC_low=None):
 
@@ -70,7 +72,7 @@ class Strategy:
             df_OHLC_low = df_OHLC_low
 
         # Call the 'main' function from the strategy module
-        self.decision_entry = self.strategy_low_timeframe.main(df_OHLC_low)
+        self.decision_entry, self.chart_entry = self.strategy_low_timeframe.main(df_OHLC_low)
 
     def check_ultimate_decision_all_modules(self):
         """ This function checks the trading decision based on all three modules"""

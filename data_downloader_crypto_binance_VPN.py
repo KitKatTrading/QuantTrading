@@ -145,6 +145,8 @@ if __name__ == '__main__':
     # remove ones not ending with "USDT"
     name_symbols = [name_symbol for name_symbol in name_symbols if name_symbol.endswith('USDT')]
 
+    # name_symbols = ['WLDUSDT']
+
     # update data for all symbols
     for name_symbol in name_symbols:
         print(f"Updating {name_symbol} {time_scale}")

@@ -49,7 +49,8 @@ if __name__ == '__main__':
                     'WAVESUSDT', 'KAVAUSDT', 'ALGOUSDT', 'NEOUSDT', 'QTUMUSDT']
     # names_symbol = ['EGLDUSDT', 'AVAXUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'INJUSDT', 'OPUSDT']
     # names_symbol = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'RUNEUSDT', 'OPUSDT', 'AVAXUSDT']
-    names_symbol = ['BTCUSDT', 'OPUDST', 'NEARUSDT', 'SOLUSDT', 'AVAXUSDT']
+    # names_symbol = ['BTCUSDT', 'OPUDST', 'NEARUSDT', 'SOLUSDT', 'AVAXUSDT']
+    names_symbol = ['WLDUSDT']
 
     # initialize master dataframe for all symbols
     df_master = pd.DataFrame(columns=['name_symbol', 'num_trades', 'num_wins', 'num_losses', 'num_breakeven',
