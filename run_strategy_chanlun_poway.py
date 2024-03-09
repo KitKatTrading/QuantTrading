@@ -7,23 +7,30 @@ def get_all_binance_future_symbols(API_KEY, API_SECRET):
     client = Client(API_KEY, API_SECRET)
     futures_exchange_info = client.futures_exchange_info()
     symbols = [symbol['symbol'] for symbol in futures_exchange_info['symbols']]
-    return symbols
 
+    # filter out the symbols that do not end with "USDT"
+    symbols = [symbol for symbol in symbols if symbol.endswith('USDT')]
+
+    return symbols
 
 
 if __name__ == '__main__':
 
     # Strategy parameter setting ###
-    time_frame_mid = '4h'
+    time_frame_mid = '1h'
+    # time_frame_mid = '4h'
+    # time_frame_mid = '8h'
+    # time_frame_mid = '12h'
+    # time_frame_mid = '1d'
 
     # datetime format
     datetime_format = '%Y-%m-%d %H:%M:%S+00:00'
 
     # # Get all future symbol names
-    # import config_binance_vpn
-    # API_KEY = config_binance_vpn.gvars['API_KEY']
-    # API_SECRET = config_binance_vpn.gvars['API_SECRET']
-    # name_symbols = get_all_binance_future_symbols(API_KEY, API_SECRET)
+    import config_binance_vpn
+    API_KEY = config_binance_vpn.gvars['API_KEY']
+    API_SECRET = config_binance_vpn.gvars['API_SECRET']
+    name_symbols = get_all_binance_future_symbols(API_KEY, API_SECRET)
 
     # single symbol test
     # name_symbols = ['WLDUSDT']

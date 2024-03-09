@@ -78,33 +78,40 @@ class Strategy:
         """ This function checks the trading decision based on all three modules"""
         trading_decision = 0
 
-        # directional module analysis
-        self.run_direction_module_live()
 
-        # DEBUG - run entry module before even needed to check if it works
-        self.run_entry_module()
+        # Use try / except to skip situation where not enough candels are available for analysis
+        try:
+            # directional module analysis
+            self.run_direction_module_live()
 
-        # only run pattern analysis if directional module analysis is not 0
-        if self.decision_direction != 0:
-            self.run_pattern_module()
+            # DEBUG - run entry module before even needed to check if it works
+            self.run_entry_module()
 
-            # only run trade entry module if both directional and pattern modules are meaningful:
-            if self.decision_pattern * self.decision_direction == 1:
-                self.run_entry_module()
+            # only run pattern analysis if directional module analysis is not 0
+            if self.decision_direction != 0:
+                self.run_pattern_module()
 
-                # Checking long setup opportunity:
-                if self.decision_direction == 1 and self.decision_pattern == 1 and self.decision_entry == 1:
-                    print('Long trading opportunity')
-                    trading_decision = 1
+                # only run trade entry module if both directional and pattern modules are meaningful:
+                if self.decision_pattern * self.decision_direction == 1:
+                    self.run_entry_module()
 
-                # Checking short setup opportunity:
-                elif self.decision_direction == -1 and self.decision_pattern == -1 and self.decision_entry == -1:
-                    print('Short trading opportunity')
-                    trading_decision = -1
+                    # Checking long setup opportunity:
+                    if self.decision_direction == 1 and self.decision_pattern == 1 and self.decision_entry == 1:
+                        # print('Long trading opportunity')
+                        trading_decision = 1
 
-                # No setup opportunity:
-                else:
-                    print('No trading opportunity')
+                    # Checking short setup opportunity:
+                    elif self.decision_direction == -1 and self.decision_pattern == -1 and self.decision_entry == -1:
+                        # print('Short trading opportunity')
+                        trading_decision = -1
+
+                    # No setup opportunity:
+                    else:
+                        # print('No trading opportunity')
+                        trading_decision = 0
+
+        except:
+            pass
 
         return trading_decision
 
