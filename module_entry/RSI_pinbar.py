@@ -17,8 +17,8 @@ RSI-based pinbar entry strategy
 
 def main(df_OHLC_low,
          RSI_period=14,
-         RSI_overbought=60,
-         RSI_oversold=30,
+         RSI_overbought=65,
+         RSI_oversold=35,
          Vol_MA_period=200,
          Vol_MA_thres_multiplier=1,
          ATR_period=200,
