@@ -678,7 +678,7 @@ class CZSC:
 
         bi_list = self.bi_list
         df = pd.DataFrame(self.bars_raw)
-        kline = KlineChart(n_rows=3, title="{}-{}".format(self.symbol, self.freq), height="800px", width="600px")
+        kline = KlineChart(n_rows=3, title="{}-{}".format(self.symbol, self.freq), height="1200px", width="100%")
         kline.add_kline(df, name="")
         # kline.add_sma(df, ma_seq=(5, 10, 21), row=1, visible=True, line_width=1.2)
         # kline.add_sma(df, ma_seq=(34, 55, 89, 144), row=1, visible=False, line_width=1.2)

@@ -180,19 +180,18 @@ if __name__ == '__main__':
                 },
             )
             import os
-
             os.remove('fig_pattern.png')
 
-            # send image fig_entry
-            fig_entry.write_image('fig_entry.png')
-            webhook_discord.post(
-                file={
-                    "file1": open("fig_entry.png", "rb"),
-                },
-            )
-            import os
-
-            os.remove('fig_entry.png')
+            # send image fig_entry - only when it is not 15m candle, to keep things clean
+            if time_scale != '15m':
+                fig_entry.write_image('fig_entry.png')
+                webhook_discord.post(
+                    file={
+                        "file1": open("fig_entry.png", "rb"),
+                    },
+                )
+                import os
+                os.remove('fig_entry.png')
 
         # check total run time
         t3 = time.time()

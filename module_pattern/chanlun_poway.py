@@ -5,8 +5,8 @@ pd.set_option('display.width', 200)
 def main(df_OHLC_mid,
          name_symbol,
          time_frame,
-         num_candles=200,
-         use_high_low=False,
+         num_candles=500,
+         # use_high_low=False,
          ):
 
     # convert DataFrame to bars object
