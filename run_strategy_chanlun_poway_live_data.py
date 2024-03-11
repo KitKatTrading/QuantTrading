@@ -7,6 +7,7 @@ import datetime
 import argparse  # Import argparse
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S+00:00"
+
 def get_all_binance_future_symbols(API_KEY, API_SECRET):
     client = Client(API_KEY, API_SECRET)
     futures_exchange_info = client.futures_exchange_info()
@@ -97,6 +98,18 @@ if __name__ == '__main__':
     # Single symbol test
     # name_symbols = ['AXLUSDT']
 
+    # Set up discord webhook
+    from config_discord_channels import gvars
+    if time_scale == '15m':
+        webhook_kk_quant_discord_powaysha = gvars['url_webhook_powaysha_15m']
+    elif time_scale == '1h':
+        webhook_kk_quant_discord_powaysha = gvars['url_webhook_powaysha_1h']
+    elif time_scale == '4h':
+        webhook_kk_quant_discord_powaysha = gvars['url_webhook_powaysha_4h']
+    elif time_scale == '12h':
+        webhook_kk_quant_discord_powaysha = gvars['url_webhook_powaysha_12h']
+    webhook_discord = Discord(url=webhook_kk_quant_discord_powaysha)
+
     # run all symbols
     for name_symbol in name_symbols:
 
@@ -151,10 +164,6 @@ if __name__ == '__main__':
             message_name = f'标的 {name_symbol}\n'
             message_timescale = f'周期 {time_scale}\n'
             message_direction = f'方向 {trade_direction}\n'
-
-            # set up discord webhook
-            webhook_kk_quant_discord_powaysha = 'https://discord.com/api/webhooks/1187690857432895588/rLiDFkbL2pPUmDnaccHDzXLpr4KD5wBTwuy78zL0QaidIWlBsdlKMU_jWxpag9azXKiL'
-            webhook_discord = Discord(url=webhook_kk_quant_discord_powaysha)
 
             # send message
             webhook_discord.post(content=message_separator)
