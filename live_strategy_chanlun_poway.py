@@ -1,4 +1,4 @@
-from Objects.strategy_live_data import Strategy
+from objects.strategy_live_data import Strategy
 from binance import Client
 from discordwebhook import Discord
 import pandas as pd
@@ -87,7 +87,8 @@ if __name__ == '__main__':
     # time_scale = '1h'
 
     # Get all future symbol names
-    import config_binance_vpn
+    from archive import config_binance_vpn
+
     API_KEY = config_binance_vpn.gvars['API_KEY']
     API_SECRET = config_binance_vpn.gvars['API_SECRET']
     name_symbols = get_all_binance_future_symbols(API_KEY, API_SECRET)
@@ -99,7 +100,7 @@ if __name__ == '__main__':
     # name_symbols = ['AXLUSDT']
 
     # Set up discord webhook
-    from config_discord_channels import gvars
+    from config.config_discord_channels import gvars
     if time_scale == '15m':
         webhook_kk_quant_discord_powaysha = gvars['url_webhook_powaysha_15m']
     elif time_scale == '1h':

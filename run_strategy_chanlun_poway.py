@@ -1,4 +1,4 @@
-from Objects.strategy import Strategy
+from objects.strategy import Strategy
 from binance import Client
 from discordwebhook import Discord
 import datetime
@@ -27,7 +27,8 @@ if __name__ == '__main__':
     datetime_format = '%Y-%m-%d %H:%M:%S+00:00'
 
     # # Get all future symbol names
-    import config_binance_vpn
+    from archive import config_binance_vpn
+
     API_KEY = config_binance_vpn.gvars['API_KEY']
     API_SECRET = config_binance_vpn.gvars['API_SECRET']
     name_symbols = get_all_binance_future_symbols(API_KEY, API_SECRET)

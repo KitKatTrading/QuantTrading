@@ -1,8 +1,9 @@
-from Objects.backtesting import *
-from Objects.pnl_analysis import *
+from objects.backtesting import *
+from objects.pnl_analysis import *
 
 # read the config file "config_local_path.py"
-import config_local_path
+from config import config_local_path
+
 dir_data = config_local_path.gvars['dir_module_data_crypto_binance']
 dir_backtesting = config_local_path.gvars['dir_module_backtest']
 

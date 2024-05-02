@@ -2,7 +2,7 @@ import numpy as np
 import talib
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-from Utils.util_general import propagate_values
+from utils.util_general import propagate_values
 
 """ 
 RSI-based pinbar entry strategy
@@ -17,8 +17,8 @@ RSI-based pinbar entry strategy
 
 def main(df_OHLC_low,
          RSI_period=14,
-         RSI_overbought=65,
-         RSI_oversold=35,
+         RSI_overbought=60,
+         RSI_oversold=40,
          Vol_MA_period=200,
          Vol_MA_thres_multiplier=1,
          ATR_period=200,

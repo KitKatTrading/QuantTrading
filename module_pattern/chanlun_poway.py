@@ -1,4 +1,4 @@
-from Objects.chanlun_hubs import *
+from objects.chanlun_hubs import *
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 

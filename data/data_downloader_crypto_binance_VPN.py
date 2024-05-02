@@ -1,5 +1,4 @@
 import pandas as pd
-import datetime
 import os
 import time
 from binance import Client
@@ -10,11 +9,13 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
 # import local path
-import config_local_path
+from config import config_local_path
+
 PATH_DATA = config_local_path.gvars['dir_module_data_crypto_binance']
 
 # import API keys
-import config_binance_vpn
+from archive import config_binance_vpn
+
 API_KEY = config_binance_vpn.gvars['API_KEY']
 API_SECRET = config_binance_vpn.gvars['API_SECRET']
 

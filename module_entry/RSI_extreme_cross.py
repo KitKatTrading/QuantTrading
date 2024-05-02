@@ -2,7 +2,7 @@ import numpy as np
 import talib
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-from Utils.util_general import propagate_values
+from utils.util_general import propagate_values
 
 """ 
 RSI-based extreme value and 6/12EMA cross strategy

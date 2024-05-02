@@ -36,7 +36,7 @@ def convert_df_to_bars(df_OHLC, time_scale, name_symbol):
     return bars_raw
 
 def convert_bi_list_to_df(bi_list):
-    """Convert a list of BI Objects to a DataFrame"""
+    """Convert a list of BI objects to a DataFrame"""
     # Define the data types for each column
     data_types = {
         # 'Date': 'object',

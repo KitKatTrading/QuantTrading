@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from tqdm import tqdm
 from datetime import datetime, timedelta
-from Objects.strategy import Strategy
+from objects.strategy import Strategy
 
 
 def convert_to_higher_timeframe(cur_date_low_timeframe, higher_timeframe):
@@ -222,7 +222,7 @@ class Backtesting:
                 df_single_trade['text'] = ""
 
             # now draw the plot
-            from Utils.util_plot_KlineChart import KlineChart
+            from utils.util_plot_KlineChart import KlineChart
             kline = KlineChart(n_rows=4, title="{}-{}".format(self.name_symbol, self.timeframe_low))
             kline.add_kline(df_single_trade, name="")
             kline.add_vol(df_single_trade, row=2)

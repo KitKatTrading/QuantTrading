@@ -1,9 +1,8 @@
 import pandas as pd
-import os
 import datetime
 import time
 import argparse
-# from Objects.strategy import Strategy
+# from objects.strategy import Strategy
 from binance import Client
 from discordwebhook import Discord
 import importlib
@@ -12,7 +11,8 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
 
 # import API keys
-import config_binance_vpn
+from archive import config_binance_vpn
+
 API_KEY = config_binance_vpn.gvars['API_KEY']
 API_SECRET = config_binance_vpn.gvars['API_SECRET']
 
@@ -20,7 +20,8 @@ API_SECRET = config_binance_vpn.gvars['API_SECRET']
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S+00:00"
 
 # import Discord webhook
-import config_discord_channels
+from config import config_discord_channels
+
 webhook_all = {'15m': config_discord_channels.gvars['url_webhook_powaysha_15m'],
                '1h': config_discord_channels.gvars['url_webhook_powaysha_1h'],
                '4h': config_discord_channels.gvars['url_webhook_powaysha_4h'],

@@ -3,7 +3,8 @@ import pandas as pd
 import importlib
 
 # read the config file "config_local_path.py"
-import config_local_path
+from config import config_local_path
+
 PATH_DATA = config_local_path.gvars['dir_module_data_crypto_binance_live']
 
 class Strategy:
